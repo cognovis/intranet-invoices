@@ -2,7 +2,7 @@
 -- Add an "office_id" field to the Invoice to allow
 -- to select different delivery addresses 
 alter table im_invoices
-add office_id integer
+add invoice_office_id integer
 	constraint im_invoices_office_fk
 	references im_offices
 ;
