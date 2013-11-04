@@ -22,14 +22,16 @@ ad_page_contract {
     { project_id:integer "" }
     invoice_nr
     invoice_date
+    { delivery_date "" }
     cost_status_id:integer 
     cost_type_id:integer
     cost_center_id:integer
-    { payment_days:integer ""}
+    { payment_term_id:integer ""}
     { payment_method_id:integer "" }
     template_id:integer
-    vat:trim,float
-    tax:trim,float
+    {vat:trim ""}
+    vat_type_id:integer
+    tax:trim
     { discount_perc "0" }
     { surcharge_perc "0" }
     { discount_text "" }
@@ -50,6 +52,13 @@ ad_page_contract {
     { return_url "/intranet-invoices/" }
 }
 
+
+if {$delivery_date eq ""} {
+    set delivery_date $invoice_date
+}
+
+set tax_format [im_l10n_sql_currency_format -style simple]
+set vat_format [im_l10n_sql_currency_format -style simple]
 
 set auto_increment_invoice_nr_p [parameter::get -parameter InvoiceNrAutoIncrementP -package_id [im_package_invoices_id] -default 0]
 
@@ -84,6 +93,7 @@ set rounding_precision 2
 set rf [expr exp(log(10) * $rounding_precision)]
 
 
+set payment_days [db_string payment_days "select aux_int1 from im_categories where category_id = :payment_term_id" -default ""]
 if {"" == $payment_days} {
     set payment_days [ad_parameter -package_id [im_package_cost_id] "DefaultProviderBillPaymentDays" "" 30]
 }
@@ -223,6 +233,11 @@ permission::grant -object_id $invoice_id -party_id $company_contact_id -privileg
 # Check if the cost item was changed via outside SQL
 im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update
 
+# Get the vat from the vat_type_id
+if {"" != $vat_type_id} {
+    set vat [db_string get_int1 "select aux_int1 from im_categories where category_id = :vat_type_id"]
+}
+
 # Update the invoice itself
 db_dml update_invoice "
 update im_invoices 
@@ -252,16 +267,19 @@ set
 	cost_center_id	= :cost_center_id,
 	template_id	= :template_id,
 	effective_date	= :invoice_date,
+        delivery_date   = :delivery_date,
 	start_block	= ( select max(start_block) 
 			    from im_start_months 
 			    where start_block < :invoice_date),
 	payment_days	= :payment_days,
-	vat		= :vat,
-	tax		= :tax,
+	payment_term_id	= :payment_term_id,
+	vat		= to_number(:vat,:vat_format),
+	tax		= to_number(:tax,:tax_format),
 	note		= :note,
 	variable_cost_p = 't',
 	amount		= null,
-	currency	= :invoice_currency
+	currency	= :invoice_currency,
+        vat_type_id     = :vat_type_id
 where
 	cost_id = :invoice_id
 "
@@ -322,6 +340,8 @@ foreach nr $item_list {
     }
 }
 
+set source_invoice_ids [list]
+
 foreach nr $item_list {
     set name $item_name($nr)
     set units $item_units($nr)
@@ -333,6 +353,11 @@ foreach nr $item_list {
     } else {
 	set item_source_invoice_id ""
     }
+    
+    if {[lsearch $source_invoice_ids $item_source_invoice_id]<0} {
+	lappend source_invoice_ids $item_source_invoice_id
+    }
+
     set project_id_item $item_project_id($nr)   
     # project_id is empty when document is created from scratch
     # project_id is required for grouped invoice items 
@@ -342,8 +367,34 @@ foreach nr $item_list {
     set sort_order $item_sort_order($nr)
     set task_id $item_task_id($nr)
     
-    ns_log Notice "item($nr, $name, $units, $uom_id, $project_id, $rate)"
-    ns_log Notice "KHD: Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id"
+    ns_log NOTICE "Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id"
+
+    # Enter the rate from the material if the rate is zero but the material is set
+    if {$rate eq 0} {
+	# try getting the default rate from the material
+	set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
+	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id" -default 0]
+	}
+	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and task_type_id = :type_id" -default 0]
+	}
+	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id " -default 0]
+	}
+	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = [im_company_internal] and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
+	}
+   	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = [im_company_internal] and uom_id = :uom_id and material_id = :material_id" -default 0]
+	}
+   	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = [im_company_internal] and uom_id = :uom_id and task_type_id = :type_id" -default 0]
+	}
+	if {$rate eq 0} {
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = [im_company_internal] and uom_id = :uom_id" -default 0]
+	}
+    }
 
     # Insert only if it's not an empty line from the edit screen
     if {!("" == [string trim $name] && (0 == $units || "" == $units))} {
@@ -403,6 +454,25 @@ foreach project_id $select_project {
 }
 
 # ---------------------------------------------------------------
+# Associate the invoice with the source invoices via acs_rels
+# ---------------------------------------------------------------
+
+foreach source_id $source_invoice_ids {
+    if {$source_id ne ""} {
+	db_1row "get relations" "
+		select	count(*) as v_rel_exists
+                from    acs_rels
+                where   object_id_one = :source_id
+                        and object_id_two = :invoice_id
+    "
+	if {0 ==  $v_rel_exists} {
+	    set rel_id [db_exec_plsql create_invoice_rel ""]
+	}
+    }
+}
+
+
+# ---------------------------------------------------------------
 # Update the invoice amount and currency 
 # based on the invoice items
 # ---------------------------------------------------------------
@@ -433,7 +503,6 @@ im_invoice_update_rounded_amount \
     -invoice_id $invoice_id \
     -discount_perc $discount_perc \
     -surcharge_perc $surcharge_perc
-
 
 # ---------------------------------------------------------------
 # 

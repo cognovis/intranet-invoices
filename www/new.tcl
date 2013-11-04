@@ -42,6 +42,7 @@ ad_page_contract {
 # 2. Defaults & Security
 # ---------------------------------------------------------------
 
+set current_cost_type_id $cost_type_id
 set user_id [ad_maybe_redirect_for_registration]
 set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowCostCenterP" "" 0]
 set current_url [im_url_with_query]
@@ -124,6 +125,7 @@ set return_url [im_url_with_query]
 set todays_date [db_string get_today "select to_char(sysdate,'YYYY-MM-DD') from dual"]
 set page_focus "im_header_form.keywords"
 set view_name "invoice_tasks"
+set payment_term_id ""
 
 set bgcolor(0) " class=roweven"
 set bgcolor(1) " class=rowodd"
@@ -148,6 +150,9 @@ set tax_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInv
 set material_enabled_p [ad_parameter -package_id [im_package_invoices_id] "ShowInvoiceItemMaterialFieldP" "" 0]
 set project_type_enabled_p [ad_parameter -package_id [im_package_invoices_id] "ShowInvoiceItemProjectTypeFieldP" "" 1]
 
+# Show dynfields?
+set show_dynfield_tab_p [ad_parameter -package_id [im_package_invoices_id] "DynamicFieldSupport" "" "0"]
+
 # Tricky case: Sombebody has called this page from a project
 # So we need to find out the company of the project and create
 # an invoice from scratch, invoicing all project elements.
@@ -163,7 +168,6 @@ if {0 != $project_id} {
 		and p.company_id = c.company_id
     "
 }
-
 
 # ---------------------------------------------------------------
 # Determine whether it's an Invoice or a Bill
@@ -213,6 +217,12 @@ if {$invoice_id} {
 	    "]
     }
 
+    set current_cost_type_id $cost_type_id
+    set parent_cost_type_id [im_category_parents $cost_type_id]
+    if {$parent_cost_type_id ne "" && $parent_cost_type_id ne 3710 && $parent_cost_type_id ne 3708} {
+	set cost_type_id $parent_cost_type_id
+    }
+
     set cost_type [im_category_from_id $cost_type_id]
     set invoice_mode "exists"
     set page_title "[_ intranet-invoices.Edit_cost_type]"
@@ -230,6 +240,20 @@ if {$invoice_id} {
 		from	im_invoice_items i
 		where	i.invoice_id=:invoice_id"
 	} err_msg
+    }
+
+    if {$invoice_or_quote_p} {
+	if { 0 == $customer_id } {
+	    set company_id [db_string cost_type "select customer_id from im_costs where cost_id = :invoice_id" -default ""]    
+	} else {
+	    set company_id $customer_id
+	}
+	set ajax_company_widget "customer_id"
+	set custprov "customer"
+    } else {
+	set company_id $provider_id
+	set ajax_company_widget "provider_id"
+	set custprov "provider"
     }
 
 } else {
@@ -250,6 +274,7 @@ if {$invoice_id} {
     set invoice_nr [im_next_invoice_nr -cost_type_id $cost_type_id -cost_center_id $cost_center_id -par_im_next_invoice_nr $par_im_next_invoice_nr]
     set cost_status_id [im_cost_status_created]
     set effective_date $todays_date
+    set delivery_date $effective_date
     set payment_days [ad_parameter -package_id [im_package_cost_id] "DefaultCompanyInvoicePaymentDays" "" 30] 
     set due_date [db_string get_due_date "select sysdate+:payment_days from dual"]
     set vat 0
@@ -263,6 +288,7 @@ if {$invoice_id} {
     set canned_note ""
     set canned_note_id ""
     set payment_method_id ""
+    set payment_term_id ""
     set template_id ""
     set company_contact_id [im_invoices_default_company_contact $company_id $project_id]
     set read_only_p "f"
@@ -308,9 +334,9 @@ if {[im_column_exists im_companies default_invoice_template_id]} {
 	set payment_method_id [db_string default_payment_method "select default_payment_method_id from im_companies where company_id = :company_id" -default ""]
     }
     
-    set company_payment_days [db_string default_payment_days "select default_payment_days from im_companies where company_id = :company_id" -default ""]
-    if {"" != $company_payment_days} {
-	set payment_days $company_payment_days
+    set company_payment_term_id [db_string default_payment_days "select payment_term_id from im_companies where company_id = :company_id" -default ""]
+    if {"" != $company_payment_term_id && "" == $payment_term_id} {
+	set payment_term_id $company_payment_term_id
     }
 }
 
@@ -329,16 +355,35 @@ if {"" == $invoice_office_id} {
     set invoice_office_id [db_string company_main_office_info "select main_office_id from im_companies where company_id = :company_id" -default ""]
 }
 
+if {[im_column_exists im_costs vat_type_id]} {
+    # Get a reasonable default value for the vat_type_id,
+    # either from the invoice or from the company.
+    
+    set vat_type_id [db_string vat_type_info "select vat_type_id from im_costs where cost_id = :invoice_id" -default ""]
+    if {"" == $vat_type_id} {
+	set vat_type_id [db_string vat_info "select vat_type_id from im_companies where company_id = :company_id" -default ""]
+    }
+    set vat_type_enabled_p 1
+} else {
+    set vat_type_enabled_p ß
+}
+
 # ---------------------------------------------------------------
 # Calculate the selects for the ADP page
 # ---------------------------------------------------------------
 
 set payment_method_select [im_invoice_payment_method_select payment_method_id $payment_method_id]
+set payment_term_select [im_category_select_plain "Intranet Payment Term" payment_term_id $payment_term_id]
 set template_select [im_cost_template_select template_id $template_id]
 set status_select [im_cost_status_select cost_status_id $cost_status_id]
 
-set type_select [im_cost_type_select cost_type_id $cost_type_id 0 "financial_doc"]
-if {"" != $cost_type_id} {
+# Find out if there are subtypes below the cost_type
+
+set subtypes [db_list subtypes "select child_id from im_category_hierarchy where parent_id = :cost_type_id"]
+
+if {$subtypes ne ""} {
+    set type_select [im_cost_type_select cost_type_id $current_cost_type_id $cost_type_id]
+} else {
     set type_select "
 	<input type=hidden name=cost_type_id value=$cost_type_id>
 	$cost_type
@@ -538,3 +583,43 @@ if { "" == $select_project_html && "" != $project_id && 0 != $project_id } {
 set sub_navbar [im_costs_navbar "none" "/intranet/invoices/index" "" "" [list]] 
 
 db_release_unused_handles
+
+# ---------------------------------------------------------------
+# Set Dynfields
+# ---------------------------------------------------------------
+
+
+set form_id "invoices_dynfield"
+
+template::form::create $form_id -has_submit 1
+template::form::section $form_id ""
+
+set object_type "im_invoice"
+set dynfield_project_type_id [im_opt_val project_type_id]
+if {[info exists project_id]} {
+    set existing_project_type_id [db_string ptype "select project_type_id from im_projects where project_id = :project_id" -default 0]
+    if {0 != $existing_project_type_id && "" != $existing_project_type_id} {
+        set dynfield_project_type_id $existing_project_type_id
+    }
+}
+
+set dynfield_invoice_id 0
+if {[info exists invoice_id]} { set dynfield_invoice_id $invoice_id }
+
+set apd ""
+
+# ad_return_complaint 1 $dynfield_project_type_id
+
+set dynfield_project_type_id ""
+
+set field_cnt [im_dynfield::append_attributes_to_form \
+    -object_subtype_id $dynfield_project_type_id \
+    -object_type $object_type \
+    -form_id $form_id \
+    -object_id $dynfield_invoice_id \
+		   ]
+if {![info exists ajax_post_data]} { 
+    set ajax_post_data ""
+}
+
+# ad_return_complaint 1 $ajax_post_data

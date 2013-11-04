@@ -34,6 +34,9 @@ ad_page_contract {
     { err_mess "" }
     { item_list_type:integer 0 }
     { pdf_p 0 }
+    { user_id ""}
+    { auto_login ""}
+    { expiry_date ""}
 }
 
 # Note: 
@@ -60,8 +63,17 @@ proc encodeXmlValue {value} {
 # Defaults & Security
 # ---------------------------------------------------------------
 
+# First check for auto login
+if {"" != $user_id && "" != $auto_login} {
+    if {![im_valid_auto_login_p -user_id $user_id -auto_login $auto_login -check_user_requires_manual_login_p 0 -expiry_date $expiry_date]} {
+	set user_id [ad_maybe_redirect_for_registration]
+    }
+} else {
+    set user_id [ad_maybe_redirect_for_registration]
+}    
+
 # Get user parameters
-set user_id [ad_maybe_redirect_for_registration]
+
 set user_locale [lang::user::locale]
 set locale $user_locale
 set page_title ""
@@ -98,6 +110,7 @@ set required_field "<font color=red size=+1><B>*</B></font>"
 
 # Type of the financial document
 set cost_type_id [db_string cost_type_id "select cost_type_id from im_costs where cost_id = :invoice_id" -default 0]
+set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowCostCenterP" "" 0]
 
 # Number formats
 set cur_format [im_l10n_sql_currency_format]
@@ -115,11 +128,15 @@ set invoice_currency [db_string cur "select currency from im_costs where cost_id
 set rf 100
 catch {set rf [db_string rf "select rounding_factor from currency_codes where iso = :invoice_currency" -default 100]}
 
+# Show dynfields?
+set show_dynfield_tab_p [ad_parameter -package_id [im_package_invoices_id] "DynamicFieldSupport" "" "0"]
+
 # Where is the template found on the disk?
 set invoice_template_base_path [ad_parameter -package_id [im_package_invoices_id] InvoiceTemplatePathUnix "" "/tmp/templates/"]
 
 # Invoice Variants showing or not certain fields.
 # Please see the parameters for description.
+set discount_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInvoiceDiscountFieldP" "" 0]
 set surcharge_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInvoiceSurchargeFieldP" "" 0]
 set surcharge_enabled_p 1
 set canned_note_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInvoiceCannedNoteP" "" 0]
@@ -127,6 +144,7 @@ set show_qty_rate_p [ad_parameter -package_id [im_package_invoices_id] "InvoiceQ
 set show_our_project_nr [ad_parameter -package_id [im_package_invoices_id] "ShowInvoiceOurProjectNr" "" 1]
 set show_our_project_nr_first_column_p [ad_parameter -package_id [im_package_invoices_id] "ShowInvoiceOurProjectNrFirstColumnP" "" 1]
 set show_leading_invoice_item_nr [ad_parameter -package_id [im_package_invoices_id] "ShowLeadingInvoiceItemNr" "" 0]
+set material_enabled_p [ad_parameter -package_id [im_package_invoices_id] "ShowInvoiceItemMaterialFieldP" "" 0]
 
 # Should we show the customer's PO number in the document?
 # This makes only sense in "customer documents", i.e. quotes, invoices and delivery notes
@@ -173,15 +191,15 @@ im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update
 # Determine if it's an Invoice or a Bill
 # ---------------------------------------------------------------
 
+# Invoices and Quotes have a "Customer" fields.
+set invoice_or_quote_p [expr [im_category_is_a $cost_type_id [im_cost_type_invoice]] || [im_category_is_a $cost_type_id [im_cost_type_quote]] || [im_category_is_a $cost_type_id [im_cost_type_delivery_note]] || [im_category_is_a $cost_type_id [im_cost_type_interco_quote]] || [im_category_is_a $cost_type_id [im_cost_type_interco_invoice]]]
+
 # Vars for ADP (can't use the commands in ADP)
 set quote_cost_type_id [im_cost_type_quote]
 set delnote_cost_type_id [im_cost_type_delivery_note]
 set po_cost_type_id [im_cost_type_po]
 set invoice_cost_type_id [im_cost_type_invoice]
 set bill_cost_type_id [im_cost_type_bill]
-
-# Invoices and Bills have a "Payment Terms" field.
-set invoice_or_bill_p [expr $cost_type_id == [im_cost_type_invoice] || $cost_type_id == [im_cost_type_bill]]
 
 # CostType for "Generate Invoice from Quote" or "Generate Bill from PO"
 set target_cost_type_id ""
@@ -229,6 +247,7 @@ set related_projects_sql "
         select distinct
 	   	r.object_id_one as project_id,
 		p.project_name,
+                im_name_from_id(project_lead_id) as project_manager,
 		p.project_nr,
 		p.parent_id,
 		p.description,
@@ -342,8 +361,9 @@ set query "
 		to_date(to_char(ci.effective_date, 'YYYY-MM-DD'), 'YYYY-MM-DD') + ci.payment_days as calculated_due_date,
 		im_cost_center_name_from_id(ci.cost_center_id) as cost_center_name,
 		im_category_from_id(ci.cost_status_id) as cost_status,
-		im_category_from_id(ci.cost_type_id) as cost_type, 
-		im_category_from_id(ci.template_id) as template
+		im_category_from_id(ci.template_id) as template,
+                im_category_from_id(c.default_payment_method_id) as default_payment_method,
+                im_category_from_id(c.company_type_id) as company_type
 	from
 		im_invoices i,
 		im_costs ci,
@@ -366,6 +386,16 @@ if { ![db_0or1row invoice_info_query $query] } {
     return
 }
 
+# Clarify the name of the parent cost_type and the cost_type itself
+set parent_cost_type_id [im_category_parents $cost_type_id]
+set current_cost_type [im_category_from_id $cost_type_id]
+if {$parent_cost_type_id ne "" && $parent_cost_type_id ne 3710 && $parent_cost_type_id ne 3708} {
+    set cost_type_id $parent_cost_type_id
+}
+set cost_type [im_category_from_id $cost_type_id]
+
+# Invoices and Bills have a "Payment Terms" field.
+set invoice_or_bill_p [im_cost_type_is_invoice_or_bill_p $cost_type_id]
 
 # ---------------------------------------------------------------
 # Get information about start- and end time of invoicing period
@@ -405,10 +435,17 @@ db_1row office_info_query "
 	where office_id = :invoice_office_id
 "
 
-
 # ---------------------------------------------------------------
 # Get everything about the contact person.
 # ---------------------------------------------------------------
+
+# Make sure to unset the company name if the company is a freelancer
+
+if {[string match "Freelance*" $company_name]} {
+    set company_name_pretty ""
+} else {
+    set company_name_pretty $company_name
+}
 
 # Use the "company_contact_id" of the invoices as the main contact.
 # Fallback to the accounting_contact_id and primary_contact_id
@@ -416,12 +453,15 @@ db_1row office_info_query "
 
 if { ![info exists company_contact_id] } { set company_contact_id ""}
 
+set company_contact_orig $company_contact_id
+
 if {"" == $company_contact_id} { 
     set company_contact_id $accounting_contact_id
 }
 if {"" == $company_contact_id} { 
     set company_contact_id $primary_contact_id 
 }
+
 set org_company_contact_id $company_contact_id
 
 set company_contact_name ""
@@ -438,6 +478,11 @@ db_0or1row accounting_contact_info "
 	from	persons
 	where	person_id = :company_contact_id
 "
+
+# If the company_contact_id is not maintained, write it now
+if {$company_contact_orig eq ""} {
+    db_dml update_company_contact "update im_invoices set company_contact_id = :company_contact_id where invoice_id = :invoice_id"
+}
 
 # Fields normally available from intranet-contacts.
 # Set these fields if contacts is not installed:
@@ -489,13 +534,6 @@ db_1row accounting_contact_info "
 set template_type ""
 if {0 != $render_template_id} {
 
-    # Maintain compatibility with old convention "invoice-english.adp"
-    # ToDo: Remove this compatibility with V4.0
-    if {[regexp {english} $template]} { set locale en }
-    if {[regexp {spanish} $template]} { set locale es }
-    if {[regexp {german} $template]} { set locale de }
-    if {[regexp {french} $template]} { set locale fr }
-    
     # New convention, "invoice.en_US.adp"
     if {[regexp {(.*)\.([_a-zA-Z]*)\.([a-zA-Z][a-zA-Z][a-zA-Z])} $template match body loc template_type]} {
 	set locale $loc
@@ -505,13 +543,36 @@ if {0 != $render_template_id} {
 # Check if the given locale throws an error
 # Reset the locale to the default locale then
 if {[catch {
-    lang::message::lookup $locale "dummy_text"
+    lang::message::lookup $locale "intranet-core.Reporting"
 } errmsg]} {
     set locale $user_locale
 }
 
 ns_log Notice "view.tcl: locale=$locale"
 ns_log Notice "view.tcl: template_type=$template_type"
+
+
+# ----------------------------------------------------------------------------------------
+# Check if there are Dynamic Fields of type date and localize them 
+# ----------------------------------------------------------------------------------------
+
+set date_fields [list]
+set column_sql "
+        select  w.widget_name,
+                aa.attribute_name
+        from    im_dynfield_widgets w,
+                im_dynfield_attributes a,
+                acs_attributes aa
+        where   a.widget_name = w.widget_name and
+                a.acs_attribute_id = aa.attribute_id and
+                aa.object_type = 'im_invoice' and
+                w.widget_name = 'date'
+"
+db_foreach column_list_sql $column_sql {
+    set y ${attribute_name}
+    set z [lc_time_fmt [subst $${y}] "%x" $locale]
+    set ${attribute_name} $z
+}
 
 
 # ---------------------------------------------------------------
@@ -618,6 +679,9 @@ if {"odt" == $template_type} {
 # ---------------------------------------------------------------
 
 set invoice_date_pretty [lc_time_fmt $invoice_date "%x" $locale]
+#set delivery_date_pretty2 [lc_time_fmt $delivery_date "%x" $locale]
+set delivery_date_pretty2 $delivery_date
+
 set calculated_due_date_pretty [lc_time_fmt $calculated_due_date "%x" $locale]
 
 set invoice_period_start_pretty [lc_time_fmt $invoice_period_start "%x" $locale]
@@ -634,20 +698,21 @@ if {"" != $cost_project_id && 0 != $cost_project_id} {
     set rel_project_id $cost_project_id
 }
 
-set project_short_name_default [db_string short_name_default "select project_nr from im_projects where project_id=:rel_project_id" -default ""]
+db_0or1row project_info_query "
+        select
+                project_nr as project_short_name_default,                                                                                   
+                im_category_from_id(project_type_id) as project_type_pretty                                                                 
+        from                                                                                                                                
+                im_projects                                                                                                                 
+        where                                                                                                                               
+                project_id = :rel_project_id                                                                                                
+ "                                                                                                                                          
+
 set customer_project_nr_default ""
-
 if {$company_project_nr_exists && $rel_project_id} {
-
-    db_0or1row project_info_query "
-    	select
-    		p.company_project_nr as customer_project_nr_default
-    	from
-    		im_projects p
-    	where
-    		p.project_id = :rel_project_id
-    "
+    set customer_project_nr_default [db_string project_nr_default "select company_project_nr from im_projects where project_id=:rel_project_id" -default ""]
 }
+
 
 # ---------------------------------------------------------------
 # Check permissions
@@ -809,13 +874,18 @@ set invoice_item_html "<tr align=center>\n"
 
 if {$show_our_project_nr && $show_leading_invoice_item_nr} {
     append invoice_item_html "
-          <td class=rowtitle $decoration_item_nr>[lang::message::lookup $locale intranet-invoices.Line_no "#"]</td>
+          <td class=rowtitle $decoration_item_nr>[lang::message::lookup $locale intranet-invoices.Line_no '#']</td>
     "
 }
 
 append invoice_item_html "
           <td class=rowtitle $decoration_description>[lang::message::lookup $locale intranet-invoices.Description]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
 "
+
+# Display the material if we have materials enabled for invoice line items
+if {$material_enabled_p} {
+    append invoice_item_html "<td class=rowtitle>[lang::message::lookup "" intranet-invoices.Material "Material"]</td>"
+}
 
 if {$show_qty_rate_p} {
     append invoice_item_html "
@@ -844,59 +914,79 @@ append invoice_item_html "
 "
 
 set ctr 1
-	set colspan [expr 2 + 3*$show_qty_rate_p + 1*$show_company_project_nr + $show_our_project_nr]
-
+set colspan [expr 2 + 1*$material_enabled_p + 3*$show_qty_rate_p + 1*$show_company_project_nr + $show_our_project_nr]
 set oo_table_xml ""
 
+set source_invoice_ids [list]
 if { 0 == $item_list_type } {
-	db_foreach invoice_items {} {
-	    # $company_project_nr is normally related to each invoice item,
-	    # because invoice items can be created based on different projects.
-	    # However, frequently we only have one project per invoice, so that
-	    # we can use this project's company_project_nr as a default
-	    if {$company_project_nr_exists && "" == $company_project_nr} { 
-		set company_project_nr $customer_project_nr_default
-	    }
-	    if {"" == $project_short_name} { 
-		set project_short_name $project_short_name_default
-	    }
+    db_foreach invoice_items {} {
+	# $company_project_nr is normally related to each invoice item,
+	# because invoice items can be created based on different projects.
+	# However, frequently we only have one project per invoice, so that
+	# we can use this project's company_project_nr as a default
+	if {$company_project_nr_exists && "" == $company_project_nr} { 
+	    set company_project_nr $customer_project_nr_default
+	}
+	if {"" == $project_short_name} { 
+	    set project_short_name $project_short_name_default
+	}
 	
-	    set amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $amount+0] $rounding_precision] "" $locale]
-	    set item_units_pretty [lc_numeric [expr $item_units+0] "" $locale]
-	    set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
+	set amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $amount+0] $rounding_precision] "" $locale]
+	set item_units_pretty [lc_numeric [expr $item_units+0] "" $locale]
+	set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
 	
-	    append invoice_item_html "
+	append invoice_item_html "
 		<tr $bgcolor([expr $ctr % 2])>
 	    "
 	
-	    if {$show_leading_invoice_item_nr} {
-	        append invoice_item_html "
+	if {$show_leading_invoice_item_nr} {
+	    append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$sort_order</td>\n"
-	    }
+	}
 	
+	if {[exists_and_not_null task_id] && $task_id >0} {
+	    set task_url [export_vars -base "/intranet-timesheet2-tasks/view" -url {task_id}]
+	    append invoice_item_html "
+                 <td $bgcolor([expr $ctr % 2])><a href='$task_url'>$item_name</a></td>
+           "
+	} else {
 	    append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2])>$item_name</td>
 	    "
-	    if {$show_qty_rate_p} {
-	        append invoice_item_html "
+	}
+
+	# Display the material if we have materials enabled for invoice line items
+	if {$material_enabled_p} {
+	    if {"" != $item_material_id && 12812 != $item_material_id} {
+		set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
+	    } else {
+		set item_material ""
+	    }
+	    append invoice_item_html "
+	          <td $bgcolor([expr $ctr % 2])>$item_material</td>
+	    "
+	}	    
+
+	if {$show_qty_rate_p} {
+	    append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$item_units_pretty</td>
 	          <td $bgcolor([expr $ctr % 2]) align=left>[lang::message::lookup $locale intranet-core.$item_uom $item_uom]</td>
 	          <td $bgcolor([expr $ctr % 2]) align=right>$price_per_unit_pretty&nbsp;$currency</td>
 	        "
-	    }
-
-	    if {$show_company_project_nr} {
-		# Only if intranet-translation has added the field
-		append invoice_item_html "
-	          <td $bgcolor([expr $ctr % 2]) align=left>$company_project_nr</td>\n"
-	    }
+	}
 	
-	    if {$show_our_project_nr} {
-		append invoice_item_html "
-	          <td $bgcolor([expr $ctr % 2]) align=left>$project_short_name</td>\n"
-	    }
-	
+	if {$show_company_project_nr} {
+	    # Only if intranet-translation has added the field
 	    append invoice_item_html "
+	          <td $bgcolor([expr $ctr % 2]) align=left>$company_project_nr</td>\n"
+	}
+	
+	if {$show_our_project_nr} {
+	    append invoice_item_html "
+	          <td $bgcolor([expr $ctr % 2]) align=left>$project_short_name</td>\n"
+	}
+	
+	append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency</td>
 		</tr>"
 	
@@ -933,7 +1023,10 @@ if { 0 == $item_list_type } {
 	
 	    incr ctr
 	}
-
+	
+	incr ctr
+    }
+    
 } elseif { 100 == $item_list_type } {
 	# item_list_type: Translation Project Hirarchy   
     	set invoice_items_sql "
@@ -945,6 +1038,8 @@ if { 0 == $item_list_type } {
                                 item_units,
                                 item_type_id,
                                 item_uom_id,
+                                item_source_invoice_id,
+                                item_material_id,
                                 price_per_unit,
 				trunc((price_per_unit * item_units) :: numeric, 2) as line_total,
 				(select category from im_categories where category_id = item_uom_id) as item_uom
@@ -985,6 +1080,18 @@ if { 0 == $item_list_type } {
                 set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
                 append invoice_item_html "<tr>"
                 append invoice_item_html "<td class='invoiceroweven'>$parent_name</td>"
+	    # Display the material if we have materials enabled for invoice line items
+	    if {$material_enabled_p} {
+		if {"" != $item_material_id && 12812 != $item_material_id} {
+		    set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
+		} else {
+		    set item_material ""
+		}
+		append invoice_item_html "
+	          <td $bgcolor([expr $ctr % 2])>$item_material</td>
+	    "
+	    }	    
+
                 if {$show_qty_rate_p} {
                 	append invoice_item_html "
                         	<td $bgcolor([expr $ctr % 2]) align=right>$item_units_pretty</td>
@@ -1331,6 +1438,11 @@ if { 0 == $item_list_type } {
 		    		set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
 				append invoice_item_html "<tr>" 
 				append invoice_item_html "<td class='invoiceroweven'>$indent$parent_name</td>" 
+				    # Display the material if we have materials enabled for invoice line items
+				    if {$material_enabled_p} {
+					append invoice_item_html "<td $bgcolor([expr $ctr % 2])>&nbps;</td>"
+				    }	    
+
 				if {$show_qty_rate_p} {
 					append invoice_item_html "
 					<td $bgcolor([expr $ctr % 2]) align=right>$item_units_pretty</td>
@@ -1360,9 +1472,97 @@ if { 0 == $item_list_type } {
 
 
 # ---------------------------------------------------------------
+# Source Invoices list
+# ---------------------------------------------------------------
+
+set linked_list_html ""
+set linked_invoice_nr ""
+set linked_invoice_ids [relation::get_objects -object_id_two $invoice_id -rel_type "im_invoice_invoice_rel"]
+set linked_invoice_ids [concat [relation::get_objects -object_id_one $invoice_id -rel_type "im_invoice_invoice_rel"] $linked_invoice_ids]
+if {$linked_invoice_ids eq ""} {
+    # this might be a parent, try it again for children
+    set linked_invoice_ids [relation::get_objects -object_id_one $invoice_id -rel_type "im_invoice_invoice_rel"]
+}
+if {$linked_invoice_ids ne ""} {
+
+    set linked_list_html "
+	<table border=0 cellPadding=1 cellspacing=1>
+        <tr>
+          <td align=middle class=rowtitle colspan=3>
+	    [lang::message::lookup $locale intranet-invoices.Linked_Invoices]
+	  </td>
+        </tr>"
+
+    set linked_list_sql "
+select
+	invoice_id as linked_invoice_id,
+        invoice_nr as linked_invoice_nr,
+        effective_date as linked_effective_date
+from
+	im_invoices, im_costs
+where
+	invoice_id in ([template::util::tcl_to_sql_list $linked_invoice_ids])
+        and cost_id = invoice_id
+"
+
+    set linked_ctr 0
+    db_foreach linked_list $linked_list_sql {
+	append linked_list_html "
+        <tr $bgcolor([expr $linked_ctr % 2])>
+          <td>
+	    <A href=/intranet-invoices/view?invoice_id=$linked_invoice_id>
+	      $linked_invoice_nr
+ 	    </A>
+	  </td></tr>\n"
+	incr linked_ctr
+    }
+
+    if {!$linked_ctr} {
+	append linked_list_html "<tr class=roweven><td align=center><i>[lang::message::lookup $locale intranet-invoices.No_linkeds_found]</i></td></tr>\n"
+    }
+
+    append linked_list_html "
+	</table>
+        </form>\n"
+    set linked_effective_date_pretty [lc_time_fmt $linked_effective_date "%x" $locale]
+}
+
+
+# ---------------------------------------------------------------
 # Add subtotal + VAT + TAX = Grand Total
 # ---------------------------------------------------------------
 
+if {[im_column_exists im_costs vat_type_id]} {
+    # get the VAT note. We do not overwrite the VAT value stored in
+    # the invoice in case the default rate has changed for the
+    # vat_type_id and this is just a reprint of the invoice
+    set vat_note [im_category_string1 -category_id $vat_type_id -locale $locale]
+} else {
+    set vat_note ""
+}
+    
+# -------------------------
+# Deal with payment terms and variables in them
+# -------------------------
+
+set payment_terms [im_category_from_id -locale $locale $payment_term_id]
+set payment_terms_note [im_category_string1 -category_id $payment_term_id -locale $locale]
+eval [template::adp_compile -string $payment_terms_note]
+set payment_terms_note $__adp_output
+
+# -------------------------
+# Deal with payment method and variables in them
+# -------------------------
+
+set payment_method [im_category_from_id -locale $locale $payment_method_id]
+set payment_method_note [im_category_string1 -category_id $payment_method_id -locale $locale]
+eval [template::adp_compile -string $payment_method_note]
+set payment_method_note $__adp_output
+
+# -------------------------------
+# Support for cost center text
+# -------------------------------
+set cost_center_note [lang::message::lookup $locale intranet-cost.cc_invoice_text_${cost_center_id} " "]
 
 # Set these values to 0 in order to allow to calculate the
 # formatted grand total
@@ -1397,6 +1597,7 @@ set subtotal_item_html "
           <td class=roweven align=right><B><nobr>$subtotal_pretty $currency</nobr></B></td>
         </tr>
 "
+
 
 
 if {"" != $vat && 0 != $vat} {
@@ -1634,11 +1835,11 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	# Rendering 
         eval [template::adp_compile -string $odt_template_content]
         set content $__adp_output
-
+	
 	# Save the content to a file.
 	set file [open $odt_content w]
 	fconfigure $file -encoding "utf-8"
-	puts $file $content
+	puts $file [intranet_oo::convert -content $content]
 	flush $file
 	close $file
 
@@ -1658,7 +1859,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	# Save the content to a file.
 	set file [open $odt_styles w]
 	fconfigure $file -encoding "utf-8"
-	puts $file $style
+	puts $file [intranet_oo::convert -content $style]
 	flush $file
 	close $file
 
@@ -1675,7 +1876,6 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 
 	# ------------------------------------------------
         # Return the file
-
 	if {$pdf_p} {
 	    if { ![db_string memorized_transaction_installed_p "select count(*) from apm_packages where package_key = 'intranet-openoffice'"]  } {
 		ad_return_complaint 1 "Please contact your System Administrator. Package 'intranet-openoffice' is missing."
@@ -1787,4 +1987,91 @@ if { "" != $err_mess } {
     set err_mess [lang::message::lookup "" $err_mess "Document Nr. not available anymore, please note and verify newly assigned number"]
 }
 
-set admin_p 1
+# ---------------------------------------------------------------------
+# Dynfields
+# ---------------------------------------------------------------------
+
+set extra_selects [list "0 as zero"]
+set date_fields [list]
+
+set column_sql "
+        select  w.deref_plpgsql_function,
+                aa.attribute_name,
+		w.widget_name
+        from    im_dynfield_widgets w,
+                im_dynfield_attributes a,
+                acs_attributes aa
+        where   a.widget_name = w.widget_name and
+                a.acs_attribute_id = aa.attribute_id and
+                aa.object_type = 'im_invoice'
+"
+db_foreach column_list_sql $column_sql {
+	if { "date" == $widget_name } {
+	   lappend date_fields $attribute_name      
+	}
+	lappend extra_selects "${deref_plpgsql_function}($attribute_name) as ${attribute_name}_deref"
+}
+
+set extra_selects [join $extra_selects ",\n\t"]
+
+set query "
+select
+        $extra_selects
+from
+        im_invoices p
+where
+        p.invoice_id=:invoice_id
+
+"
+
+if { ![db_0or1row invoice_info_query $query] } {
+    # no dynfields - deactivate tab view 
+}
+
+set project_base_data_html "
+                        <table border=0 cellpadding='10px' cellspacing='10px'>
+                          <tr>
+                            <!--<td>[_ intranet-core.Project_name]</td>-->
+                            <td><b>Attribute</b></td>
+                            <td><b>Value</b></td>
+                          </tr>"
+set column_sql "
+        select
+                aa.pretty_name,
+                aa.attribute_name
+        from
+                im_dynfield_widgets w,
+                acs_attributes aa,
+                im_dynfield_attributes a
+                LEFT OUTER JOIN (
+                        select *
+                        from im_dynfield_layout
+                        where page_url = ''
+                ) la ON (a.attribute_id = la.attribute_id)
+        where
+                a.widget_name = w.widget_name and
+                a.acs_attribute_id = aa.attribute_id and
+                aa.object_type = 'im_invoice'
+        order by
+                coalesce(la.pos_y,0), coalesce(la.pos_x,0)
+"
+
+
+db_foreach column_list_sql $column_sql {
+    set var ${attribute_name}_deref
+# ad_return_complaint 1 $var
+    set value [expr $$var]
+    if {"" != [string trim $value]} {
+                append project_base_data_html "
+                  <tr>
+                    <td>[lang::message::lookup "" intranet-core.$attribute_name $pretty_name]</td>
+                    <td>$value</td>
+                  </tr>
+                "
+    }
+}
+
+
+append project_base_data_html "</table>"
+
+#set admin_p 1

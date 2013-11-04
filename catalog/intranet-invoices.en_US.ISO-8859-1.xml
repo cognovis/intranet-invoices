@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="ISO-8859-1"?>
-<message_catalog package_key="intranet-invoices" package_version="3.4.0.7.0" locale="en_US" charset="ISO-8859-1">
+<message_catalog package_key="intranet-invoices" locale="en_US" charset="ISO-8859-1">
+
   <msg key="Add_a_Payment">Add a Payment</msg>
   <msg key="Add_a_Project">Add a Project</msg>
   <msg key="Add_a_user">Add a user</msg>
@@ -32,6 +33,7 @@
   <msg key="Date">Date</msg>
   <msg key="days">days</msg>
   <msg key="Del">Del</msg>
+  <msg key="delivery_date">Delivery Date</msg>
   <msg key="Description">Description</msg>
   <msg key="Document_">Document #</msg>
   <msg key="Document_hash_simbol">Document #</msg>
@@ -42,8 +44,8 @@
   <msg key="Edit_cost_type">Save %cost_type%</msg>
   <msg key="Edit_cost_type_1">Edit %cost_type</msg>
   <msg key="Email">Email</msg>
-  <msg key="Error_multiple_currencies">Multiple Currencies Error</msg>
   <msg key="Error_Document_Nr_exists">Document Nr. not available anymore, please note and verify newly assigned number</msg>
+  <msg key="Error_multiple_currencies">Multiple Currencies Error</msg>
   <msg key="Export_Companies_CSV">Export Companies CSV</msg>
   <msg key="Export_Company_Cube">Export Companies Cube</msg>
   <msg key="Export_Customer_Invoice_Cube">Export Customer Invoice Cube</msg>
@@ -64,7 +66,33 @@
   <msg key="InterCo_Quote_New">New InterCo Quote</msg>
   <msg key="intranet-invoices.Error_multiple_currencies">Multiple Currencies Error</msg>
   <msg key="Invoice_Address">Invoice Address</msg>
+  <msg key="invoice_email_body_3700">Dear %first_names%
+ 
+Attached you will find your invoice. Please check that everything is okay and let us know if changes are needed.
+ 
+Thank you for your business.</msg>
+  <msg key="invoice_email_body_3702">Dear %first_names%
+ 
+Attached you will find your offer. Please check that everything is okay and let us know if changes are needed.
+ 
+Looking forward doing business with you.</msg>
+  <msg key="invoice_email_body_3704">Dear %first_names%
+ 
+Attached you will find your credit items. Please check that everything is okay (bank, address, vat-number, etc.) and let us know if changes are needed.
+ 
+Thank you for the excellent teamwork.</msg>
+  <msg key="invoice_email_body_3706">Dear %first_names%
+ 
+Attached you will find your purchase offer. Please check that everything is okay and let us know if changes are needed.
+ 
+Looking forward doing business with you.</msg>
+  <msg key="invoice_email_subject_3700">Invoice</msg>
+  <msg key="invoice_email_subject_3702">Offer</msg>
+  <msg key="invoice_email_subject_3704">Provider Bill</msg>
+  <msg key="invoice_email_subject_3706">Purchase Order</msg>
+  <msg key="Invoice_Mail">Invoice Mail</msg>
   <msg key="Line">Line</msg>
+  <msg key="Linked_Invoices">Linked Invoices</msg>
   <msg key="lt_Cant_find_the_documen">Can't find the document# %invoice_id%</msg>
   <msg key="lt_Dear_accounting_conta">Dear %accounting_contact_name%,
 
@@ -141,6 +169,7 @@ Best regards,
   <msg key="Payment_Method_1">Payment Method:</msg>
   <msg key="Payment_Terms">Payment Terms:</msg>
   <msg key="Payment_terms">Payment terms</msg>
+  <msg key="Paypal_Payments">Paypal Payment</msg>
   <msg key="Phone">Phone</msg>
   <msg key="Preview">Preview</msg>
   <msg key="Preview_as_HTML">Preview as HTML</msg>
@@ -167,6 +196,7 @@ Best regards,
   <msg key="Send_invoice_as_HTML_attachment">Send invoice as HTML attachment</msg>
   <msg key="Send_invoice_as_HTML_link">Send invoice as HTML link</msg>
   <msg key="Send_invoice_as_link">Send invoice as link</msg>
+  <msg key="Skrill_Payments">Skrill Payment</msg>
   <msg key="Start_Confirmation_Workflow">Start Confirmation Workflow</msg>
   <msg key="Status">Status</msg>
   <msg key="Submit">Submit</msg>
@@ -187,6 +217,7 @@ Best regards,
   <msg key="UOM">UOM</msg>
   <msg key="VAT">VAT</msg>
   <msg key="VATnbsp">VAT&amp;nbsp;</msg>
+  <msg key="Wire_Transfer">Wire Transfer</msg>
   <msg key="Your_Reference">Your Reference</msg>
   <msg key="Yr_Job__PO_No">PO No.</msg>
   <msg key="Zip">Zip</msg>

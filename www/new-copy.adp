@@ -5,7 +5,7 @@
 
 <form action=new-2 method=POST>
 <% set invoice_id $new_invoice_id %>
-<%= [export_form_vars invoice_id project_id return_url reference_document_id] %>
+<%= [export_form_vars invoice_id project_id return_url reference_document_id source_invoice_id] %>
 @select_project_html;noquote@
 <if @show_cost_center_p@></if><else><input type=hidden name=cost_center_id value=@cost_center_id@></else>
 
@@ -48,6 +48,12 @@
 	            days</td>
 	        </tr>
 <if @invoice_or_bill_p@>
+	        <tr> 
+	          <td class=roweven>#intranet-invoices.delivery_date#</td>
+	          <td class=roweven> 
+	            <input type=text name=delivery_date size=15 value='@delivery_date@'>
+	          </td>
+	        </tr>
 	        <tr> 
 	          <td class=rowodd>Payment Method</td>
 	          <td class=rowodd>@payment_method_select;noquote@</td>
@@ -116,6 +122,14 @@
                   </td>
                 </tr>
 
+<if @vat_type_enabled_p@>
+		<tr>
+		  <td class=rowodd>#intranet-core.Tax_classification#</td>
+                  <td class=rowodd>
+		    <%= [im_category_select -translate_p 1 -plain_p 1 -cache_interval 0 "Intranet VAT Type" vat_type_id $vat_type_id] %>
+                 </td>
+		</tr>
+</if>
         </table>
     </tr>
   </table>
@@ -133,8 +147,8 @@
           <td class=rowtitle>#intranet-invoices.Line#</td>
           <td class=rowtitle>#intranet-invoices.Description#</td>
 
-<if @$material_enabled_p@>
-          <td class=rowtitle>#intranet-invoices.Material#</td>
+<if @material_enabled_p@>
+          <td class=rowtitle>#intranet-core.Materials#</td>
 </if>
 <if @project_type_enabled_p@>
           <td class=rowtitle>#intranet-invoices.Type#</td>
@@ -180,24 +194,31 @@
           <td> 
           </td>
           <td colspan=99 align=right> 
+<if @vat_type_enabled_p@ eq 0>
             <table border=0 cellspacing=1 cellpadding=0>
               <tr> 
                 <td>#intranet-invoices.VAT#&nbsp;</td>
-                <td><input type=text name=vat value='@vat@' size=4> % &nbsp;</td>
+                <td><input type=text name=vat value="@vat@" size=4> % &nbsp;</td>
               </tr>
             </table>
+</if>
           </td>
         </tr>
         <tr> 
           <td> 
           </td>
           <td colspan=99 align=right> 
+<if @tax_enabled_p@>
             <table border=0 cellspacing=1 cellpadding=0>
               <tr> 
                 <td>#intranet-invoices.TAX#&nbsp;</td>
                 <td><input type=text name=tax value='@tax@' size=4> % &nbsp;</td>
               </tr>
             </table>
+</if>
+<else>
+              <input type=hidden name=tax value="@tax@">
+</else>
           </td>
         </tr>
         <tr> 

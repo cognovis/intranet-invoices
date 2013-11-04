@@ -3,6 +3,31 @@
 <property name="main_navbar_label">finance</property>
 <property name="sub_navbar">@sub_navbar;noquote@</property>
 
+<if @show_dynfield_tab_p@ eq 1>
+
+	<script src="http://yui.yahooapis.com/2.8.2r1/build/yahoo-dom-event/yahoo-dom-event.js"></script>
+	<script src="http://yui.yahooapis.com/2.8.2r1/build/element/element-min.js"></script>
+	<script src="http://yui.yahooapis.com/2.8.2r1/build/tabview/tabview-min.js"></script>
+	<link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/2.8.2r1/build/tabview/assets/skins/sam/tabview.css">
+
+	<script type="text/javascript">
+		var myTabs = new YAHOO.widget.TabView("demo");
+	</script>
+
+	<div class="yui-skin-sam">
+
+	<div id="demo" class="yui-navset">
+	    <ul class="yui-nav">
+        	<li class="selected"><a href="#tab1"><em>Invoice</em></a></li>
+	        <li><a href="#tab2"><em>Dynamic Invoice Elements</em></a></li>
+ 	   </ul>
+
+	<div class="yui-content">
+	<div>
+</if>
+
+
+
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 <span style="color:red;font-weight:bold;">@err_mess@</span>
 
@@ -15,7 +40,9 @@
   <td>
     @payment_list_html;noquote@
   </td>
-
+  <td>
+    @linked_list_html;noquote@
+  </td>
 
 <if @surcharge_enabled_p@>
 <td>
@@ -73,7 +100,8 @@
 	  <% set preview_vars [export_url_vars invoice_id render_template_id return_url] %>
 	  <A HREF="/intranet-invoices/view?@preview_vars@">
 		<%= [lang::message::lookup "" intranet-invoices.Preview_using_template "Preview using template"] %>
-	  </A>
+	  </A>&nbsp;
+          (<A HREF="/intranet-invoices/view?@preview_vars@&pdf_p=1">PDF</A> - <a href="/intranet-invoices/mail?@preview_vars@">MAIL</a>)
         <li>
           <% set render_template_id $template_id %>
           <% set preview_vars [export_url_vars invoice_id render_template_id return_url] %>
@@ -124,6 +152,13 @@
 
 
 <if @admin@>
+	<li>
+		<% set blurb [lang::message::lookup $locale intranet-invoices.Copy_Invoice "Copy Invoice"] %>
+		<% set source_invoice_id $invoice_id %>
+		<% set target_cost_type_id [im_cost_type_invoice] %>
+		<% set gen_vars [export_url_vars source_invoice_id target_cost_type_id return_url] %>
+		<A HREF="/intranet-invoices/new-copy?@gen_vars@">@blurb@</A>
+	</li>
 	<if @cost_type_id@ eq @quote_cost_type_id@>
 	<li>
 		<% set blurb [lang::message::lookup $locale intranet-invoices.Generate_Invoice_from_Quote "Generate Invoice from Quote"] %>
@@ -254,16 +289,18 @@
           <td  class=roweven>#intranet-invoices.cost_type_date#:</td>
           <td  class=roweven>@invoice_date_pretty@</td>
         </tr>
-<if [apm_package_installed_p "intranet-cost-center"] >
-    <if @show_cost_center_p@>
+
+    <if @show_cost_center_p@ eq 1>
         <tr> 
           <td  class=roweven><%= [lang::message::lookup "" intranet-cost.Cost_Center "Cost Center"] %>:</td>
           <td  class=roweven>@cost_center_name@</td>
         </tr>
     </if>
-</if>
-
-<if @invoice_or_bill_p@>
+        <tr> 
+          <td  class=rowodd>#intranet-invoices.delivery_date#</td>
+          <td  class=rowodd>@delivery_date_pretty2@</td>
+	</tr>
+<if @invoice_or_bill_p@ eq 1>
         <tr> 
           <td  class=rowodd>#intranet-invoices.cost_type_due_date#</td>
           <td  class=rowodd>@due_date@</td>
@@ -271,7 +308,7 @@
 
         <tr> 
           <td class=roweven>#intranet-invoices.Payment_terms#</td>
-          <td class=roweven>#intranet-invoices.lt_payment_days_days_dat#</td>
+          <td class=roweven>@payment_terms;noquote@</td>
 	</tr>
 
 	<tr>
@@ -289,7 +326,7 @@
 
 	<tr>
           <td class=roweven>#intranet-invoices.cost_type_type_1#</td>
-          <td class=roweven>@cost_type@</td>
+          <td class=roweven>@current_cost_type@</td>
         </tr>
 
         <tr> 
@@ -386,6 +423,21 @@
 
 </td></tr>
 </table>
+<if @show_dynfield_tab_p@ eq 1>
+</div>
+
+
+<div>
+    <%= [im_table_with_title "" $project_base_data_html] %>
+</div>
+
+</div>
+
+
+
+</div>
+</div>
+</if>
 
 <%=[im_component_insert "Filestorage Financial Document"]%>
 <%=[im_component_insert "Audit Trail Invoices"]%>

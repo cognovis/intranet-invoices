@@ -26,6 +26,7 @@ ad_page_contract {
 # ---------------------------------------------------------------
 # Security
 # ---------------------------------------------------------------
+set current_cost_type_id $target_cost_type_id
 
 set user_id [ad_maybe_redirect_for_registration]
 if {![im_permission $user_id add_invoices]} {
@@ -97,7 +98,6 @@ db_1row invoices_info_query "
 select
 	i.*,
 	ci.*,
-	im_category_from_id(:target_cost_type_id) as target_cost_type,
 	i.invoice_nr as org_invoice_nr,
 	ci.note as cost_note,
 	to_char(ci.effective_date,:date_format) as effective_date,
@@ -122,10 +122,19 @@ where
 LIMIT 1
 "
 
+set current_cost_type_id $target_cost_type_id
+set parent_cost_type_id [im_category_parents $target_cost_type_id]
+if {$parent_cost_type_id ne "" && $parent_cost_type_id ne 3710 && $parent_cost_type_id ne 3708} {
+    set target_cost_type_id $parent_cost_type_id
+}
+
+set target_cost_type [im_category_from_id $target_cost_type_id]
+
+
 # Use today's date as effective date, because the
 # quote was old...
 set effective_date $todays_date
-
+set delivery_date $effective_date
 
 # ---------------------------------------------------------------
 
@@ -163,7 +172,7 @@ db_1row default_vals "
 	from
 		im_companies
 	where
-		company_id = :customer_id
+		company_id = :company_id
 "
 
 set default_tax ""
@@ -171,19 +180,21 @@ if {[im_column_exists im_companies default_tax]} {
     set default_tax [db_string default_tax "select default_tax from im_companies where company_id = :company_id" -default "0"]
 }
 
+# Do not overwrite the payment method if it already exists.
+# Make sure to adopt it for everything
 
-if {$target_cost_type_id == [im_cost_type_invoice]} {
-    if {"" != $default_vat} { set vat $default_vat }
-    if {"" != $default_tax} { set tax $default_tax }
-    if {"" != $default_payment_days} { set payment_days $default_payment_days }
-    if {"" != $default_payment_method_id} { set payment_method_id $default_payment_method_id }
-}
+
+if {"" == $vat} { set vat $default_vat }
+if {"" == $tax} { set tax $default_tax }
+if {"" == $payment_days} { set payment_days $default_payment_days }
+if {"" == $payment_method_id} { set payment_method_id $default_payment_method_id }
+
 
 # Default for template: Get it from the company
 set template_id [im_invoices_default_company_template $target_cost_type_id $company_id]
 
 
-set invoice_mode "[_ intranet-invoices.clone]"
+set invoice_mode "[_ intranet-invoices.Clone]"
 set page_title "[_ intranet-invoices.Clone] $target_cost_type"
 set button_text [_ intranet-invoices.Submit]
 set context_bar [im_context_bar [list /intranet/invoices/ "Finance"] $page_title]
@@ -196,6 +207,21 @@ set contact_select [im_company_contact_select company_contact_id $company_contac
 set cost_center_label [lang::message::lookup "" intranet-invoices.Cost_Center "Cost Center"]
 set cost_center_select [im_cost_center_select -include_empty 1 -department_only_p 0 cost_center_id $cost_center_id $cost_type_id]
 
+if {[im_column_exists im_costs vat_type_id]} {
+    # Get a reasonable default value for the vat_type_id,
+    # either from the invoice or from the company.
+    
+    set vat_type_id [db_string vat_type_info "select vat_type_id from im_costs where cost_id = :invoice_id" -default ""]
+    if {"" == $vat_type_id} {
+	set vat_type_id [db_string vat_info "select vat_type_id from im_companies where company_id = :company_id" -default ""]
+    }
+    set vat_type_enabled_p 1
+} else {
+    set vat_type_enabled_p ß
+}
+
+# Should we show the "Tax" field?
+set tax_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInvoiceTaxFieldP" "" 1]
 
 # ---------------------------------------------------------------
 # Modify some variable between the source and the target invoice
@@ -220,18 +246,35 @@ set new_invoice_id [im_new_object_id]
 # ---------------------------------------------------------------
 # Calculate the selects for the ADP page
 # ---------------------------------------------------------------
-
 set payment_method_select [im_invoice_payment_method_select payment_method_id $payment_method_id]
 set template_select [im_cost_template_select template_id $template_id]
 set status_select [im_cost_status_select cost_status_id $cost_status_id]
 
-# Type_select doesnt allow for options anymore...
-# set type_select [im_cost_type_select cost_type_id $target_cost_type_id 0 "financial_doc"]
-#
-set type_select "
-        <input type=hidden name=cost_type_id value=$target_cost_type_id>
-        $target_cost_type
-"
+# Find out the current type and, if int1 matches, find the type in the
+# target_cost_type
+
+set current_cost_type_id [db_string linked_cost_type "
+    select category_id 
+    from im_categories, im_category_hierarchy
+    where parent_id = :target_cost_type_id 
+    and aux_int1 = (select aux_int1 from im_categories where category_id = :cost_type_id)
+    and child_id = category_id
+    limit 1
+" -default $target_cost_type_id]
+			
+
+# Find out if there are subtypes below the cost_type
+set subtypes [db_list subtypes "select child_id from im_category_hierarchy where parent_id = :target_cost_type_id"]
+
+if {$subtypes ne ""} {
+    set type_select [im_cost_type_select cost_type_id $current_cost_type_id $target_cost_type_id]
+} else {
+    set type_select "
+	<input type=hidden name=cost_type_id value=$target_cost_type_id>
+	$target_cost_type
+    "
+}
+
 
 
 # ---------------------------------------------------------------
