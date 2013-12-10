@@ -217,10 +217,12 @@ if {$invoice_or_quote_p} {
     # A Customer document
     set customer_or_provider_join "and ci.customer_id = c.company_id"
     set provider_company "Customer"
+    set recipient_select "ci.customer_id as recipient_company_id"
 } else {
     # A provider document
     set customer_or_provider_join "and ci.provider_id = c.company_id"
     set provider_company "Provider"
+    set recipient_select "ci.provider_id as recipient_company_id"
 }
 
 if {!$invoice_or_quote_p} { set company_project_nr_exists 0}
@@ -350,6 +352,7 @@ set query "
 	select
 		c.*,
 		i.*,
+                $recipient_select ,
 		ci.effective_date::date + ci.payment_days AS due_date,
 		ci.effective_date AS invoice_date,
 		ci.cost_status_id AS invoice_status_id,
@@ -1545,6 +1548,9 @@ if {[im_column_exists im_costs vat_type_id]} {
 # Deal with payment terms and variables in them
 # -------------------------
 
+if {"" == $payment_term_id} {
+    set payment_term_id [db_string payment_term "select payment_term_id from im_companies where company_id = :recipient_company_id" -default ""]
+}
 set payment_terms [im_category_from_id -locale $locale $payment_term_id]
 set payment_terms_note [im_category_string1 -category_id $payment_term_id -locale $locale]
 eval [template::adp_compile -string $payment_terms_note]
