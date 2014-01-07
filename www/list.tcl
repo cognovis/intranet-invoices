@@ -17,7 +17,7 @@ ad_page_contract {
     @author mbryzek@arsdigita.com
     @cvs-id index.tcl,v 3.24.2.9 2000/09/22 01:38:44 kevin Exp
 } {
-    { order_by "Document No" }
+    { order_by "Effective Date" }
     { cost_status_id:integer "[im_cost_status_created]" } 
     { cost_type_id:integer 0 } 
     { company_id:integer 0 } 
@@ -230,6 +230,11 @@ ns_log Notice "/intranet-invoices/index: company_where=$company_where"
 
 set counter_reset_expression ""
 set order_by_clause ""
+
+# If filter is set to Customer or Provider Doc's and no order_by is providedwe order by creation date.
+# Before order_by was set to default (Document No). This way documents showed up grouped by document types. 
+# Users want to see sub-types of Provider/Customer documents ordered by creation date by default.    
+
 switch $order_by {
     "Document No" { 
 	set order_by_clause "order by invoice_nr DESC" 
@@ -264,6 +269,9 @@ switch $order_by {
 	set order_by_clause "order by cost_type" 
 	set counter_reset_expression {$cost_type_id}
     }
+    "Effective Date" {
+        set order_by_clause "order by cost_effective_date DESC"
+    }
 }
 
 set where_clause [join $criteria " and\n            "]
@@ -291,6 +299,7 @@ select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
 	o.object_type,
+        to_char(ci.effective_date, 'YYYY-MM-DD') cost_effective_date,
 	(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
@@ -376,6 +385,7 @@ if {[string equal $letter "ALL"]} {
 # 6a. Format the Filter: Get the admin menu
 # ---------------------------------------------------------------
 
+<<<<<<< HEAD
 if {"" != $parent_menu_label} {
     set parent_menu_sql "select menu_id from im_menus where label=:parent_menu_label"
     set parent_menu_id [db_string parent_admin_menu $parent_menu_sql -default ""]
@@ -383,23 +393,23 @@ if {"" != $parent_menu_label} {
     set menu_select_sql "
         select  m.*
         from    im_menus m
-        where   parent_menu_id = :parent_menu_id
+        where   parent_menu_id in (select menu_id from im_menus where label in ($parent_menu_sql)) 
                 and im_object_permission_p(m.menu_id, :user_id, 'read') = 't'
         order by sort_order"
 
-    # Start formatting the menu bar
-    set new_document_menu "<ul>"
-    set ctr 0
-    db_foreach menu_select $menu_select_sql {
-	ns_log Notice "im_sub_navbar: menu_name='$name'"
-	regsub -all " " $name "_" name_key
-	set name_loc [lang::message::lookup "" $package_name.$name_key $name]
-	append new_document_menu "<li><a href=\"$url\">$name_loc</a></li>\n"
-	incr ctr
-    }
-    append new_document_menu "</ul>"
-    if {0 == $ctr} { set new_document_menu "" }
+# Start formatting the menu bar
+set new_document_menu "<ul>"
+set ctr 0
+db_foreach menu_select $menu_select_sql {
+    ns_log Notice "im_sub_navbar: menu_name='$name'"
+    regsub -all " " $name "_" name_key
+    set name_loc [lang::message::lookup "" $package_name.$name_key $name]
+    append new_document_menu "<li><a href=\"$url\">$name_loc</a></li>\n"
+    incr ctr
 }
+append new_document_menu "</ul>"
+if {0 == $ctr} { set new_document_menu "" }
+
 
 # ---------------------------------------------------------------
 # 6. Format the Filter
@@ -443,6 +453,48 @@ ad_form -extend -name $form_id -form {
 # Compile and execute the formtemplate if advanced filtering is enabled.
 eval [template::adp_compile -string {<formtemplate id="invoice_filter" style="tiny-plain-po"></formtemplate>}]
 set filter_html $__adp_output
+=======
+set filter_html "
+	<form method=get action=\"/intranet-invoices/list\">
+	[export_form_vars order_by how_many view_name include_subinvoices_p]
+	<table border=0 cellpadding=1 cellspacing=1>
+	  <tr>
+	    <td>[_ intranet-invoices.Document_Status]</td>
+	    <td>
+              [im_category_select -include_empty_p 1 "Intranet Cost Status" cost_status_id $cost_status_id]
+            </td>
+	  </tr>
+	  <tr>
+	    <td>[_ intranet-invoices.Document_Type]</td>
+	    <td>
+              [im_category_select -include_empty_p 1 "Intranet Cost Type" cost_type_id $cost_type_id]
+            </td>
+	  </tr>
+	  <tr>
+	    <td>[lang::message::lookup "" intranet-invoices.Company "Company"]</td>
+	    <td>
+              [im_company_select -include_empty_p 1 -include_empty_name "All" company_id $company_id]
+            </td>
+	  </tr>
+	  <tr>
+	    <td class=form-label>[_ intranet-core.Start_Date]</td>
+	    <td class=form-widget>
+	      <input type='textfield' name='start_date' id='start_date' value='$start_date' size='10'><input style=\"height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');\" onclick=\"return showCalendar('start_date', 'y-m-d');\" type=\"button\">
+	    </td>
+	  </tr>
+	  <tr>
+	    <td class=form-label>[lang::message::lookup "" intranet-core.End_Date "End Date"]</td>
+	    <td class=form-widget>
+	      <input type='textfield' name='end_date' id='end_date' value='$end_date' size='10'><input style=\"height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');\" onclick=\"return showCalendar('end_date', 'y-m-d');\" type=\"button\">
+	    </td>
+	  </tr>
+	  <tr>
+	    <td></td>
+	    <td><input type=submit value='[_ intranet-invoices.Go]' name=submit></td>
+	  </tr>
+	</table>
+	</form>"
+>>>>>>> 0b0c60fee05a5e2c6d86e9f2be5bddd25c2f6625
 
 # ---------------------------------------------------------------
 # 7. Format the List Table Header
@@ -633,8 +685,11 @@ set left_navbar_html "
                 </div>
                 $filter_html
             </div>
-            <hr/>
+" 
 
+if { "" != $new_document_menu } {
+    append left_navbar_html "
+            <hr/>
             <div class='filter-block'>
                 <div class='filter-title'>
                 #intranet-invoices.lt_New_Company_Documents#
@@ -642,5 +697,7 @@ set left_navbar_html "
                 $new_document_menu
             </div>
             <hr/>
-"
+    "
+}
+
 
