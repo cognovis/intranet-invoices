@@ -385,7 +385,6 @@ if {[string equal $letter "ALL"]} {
 # 6a. Format the Filter: Get the admin menu
 # ---------------------------------------------------------------
 
-<<<<<<< HEAD
 if {"" != $parent_menu_label} {
     set parent_menu_sql "select menu_id from im_menus where label=:parent_menu_label"
     set parent_menu_id [db_string parent_admin_menu $parent_menu_sql -default ""]
@@ -453,48 +452,6 @@ ad_form -extend -name $form_id -form {
 # Compile and execute the formtemplate if advanced filtering is enabled.
 eval [template::adp_compile -string {<formtemplate id="invoice_filter" style="tiny-plain-po"></formtemplate>}]
 set filter_html $__adp_output
-=======
-set filter_html "
-	<form method=get action=\"/intranet-invoices/list\">
-	[export_form_vars order_by how_many view_name include_subinvoices_p]
-	<table border=0 cellpadding=1 cellspacing=1>
-	  <tr>
-	    <td>[_ intranet-invoices.Document_Status]</td>
-	    <td>
-              [im_category_select -include_empty_p 1 "Intranet Cost Status" cost_status_id $cost_status_id]
-            </td>
-	  </tr>
-	  <tr>
-	    <td>[_ intranet-invoices.Document_Type]</td>
-	    <td>
-              [im_category_select -include_empty_p 1 "Intranet Cost Type" cost_type_id $cost_type_id]
-            </td>
-	  </tr>
-	  <tr>
-	    <td>[lang::message::lookup "" intranet-invoices.Company "Company"]</td>
-	    <td>
-              [im_company_select -include_empty_p 1 -include_empty_name "All" company_id $company_id]
-            </td>
-	  </tr>
-	  <tr>
-	    <td class=form-label>[_ intranet-core.Start_Date]</td>
-	    <td class=form-widget>
-	      <input type='textfield' name='start_date' id='start_date' value='$start_date' size='10'><input style=\"height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');\" onclick=\"return showCalendar('start_date', 'y-m-d');\" type=\"button\">
-	    </td>
-	  </tr>
-	  <tr>
-	    <td class=form-label>[lang::message::lookup "" intranet-core.End_Date "End Date"]</td>
-	    <td class=form-widget>
-	      <input type='textfield' name='end_date' id='end_date' value='$end_date' size='10'><input style=\"height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');\" onclick=\"return showCalendar('end_date', 'y-m-d');\" type=\"button\">
-	    </td>
-	  </tr>
-	  <tr>
-	    <td></td>
-	    <td><input type=submit value='[_ intranet-invoices.Go]' name=submit></td>
-	  </tr>
-	</table>
-	</form>"
->>>>>>> 0b0c60fee05a5e2c6d86e9f2be5bddd25c2f6625
 
 # ---------------------------------------------------------------
 # 7. Format the List Table Header
