@@ -704,6 +704,7 @@ if {"" != $cost_project_id && 0 != $cost_project_id} {
     set rel_project_id $cost_project_id
 }
 
+set project_short_name_default ""
 db_0or1row project_info_query "
         select
                 project_nr as project_short_name_default,                                                                                   
@@ -926,111 +927,109 @@ set oo_table_xml ""
 set source_invoice_ids [list]
 if { 0 == $item_list_type } {
     db_foreach invoice_items {} {
-	# $company_project_nr is normally related to each invoice item,
-	# because invoice items can be created based on different projects.
-	# However, frequently we only have one project per invoice, so that
-	# we can use this project's company_project_nr as a default
-	if {$company_project_nr_exists && "" == $company_project_nr} { 
-	    set company_project_nr $customer_project_nr_default
-	}
-	if {"" == $project_short_name} { 
-	    set project_short_name $project_short_name_default
-	}
+	    # $company_project_nr is normally related to each invoice item,
+        # because invoice items can be created based on different projects.
+        # However, frequently we only have one project per invoice, so that
+        # we can use this project's company_project_nr as a default
+        if {$company_project_nr_exists && "" == $company_project_nr} { 
+	        set company_project_nr $customer_project_nr_default
+        }
+        if {"" == $project_short_name} { 
+	        set project_short_name $project_short_name_default
+        }
 	
-	set amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $amount+0] $rounding_precision] "" $locale]
-	set item_units_pretty [lc_numeric [expr $item_units+0] "" $locale]
-	set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
+        set amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $amount+0] $rounding_precision] "" $locale]
+        set item_units_pretty [lc_numeric [expr $item_units+0] "" $locale]
+        set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
 	
-	append invoice_item_html "
+        append invoice_item_html "
 		<tr $bgcolor([expr $ctr % 2])>
 	    "
 	
-	if {$show_leading_invoice_item_nr} {
-	    append invoice_item_html "
+        if {$show_leading_invoice_item_nr} {
+            append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$sort_order</td>\n"
-	}
+        }
 	
-	if {[exists_and_not_null task_id] && $task_id >0} {
-	    set task_url [export_vars -base "/intranet-timesheet2-tasks/view" -url {task_id}]
-	    append invoice_item_html "
+        if {[exists_and_not_null task_id] && $task_id >0} {
+            set task_url [export_vars -base "/intranet-timesheet2-tasks/view" -url {task_id}]
+            append invoice_item_html "
                  <td $bgcolor([expr $ctr % 2])><a href='$task_url'>$item_name</a></td>
            "
-	} else {
-	    append invoice_item_html "
+        } else {
+	        append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2])>$item_name</td>
 	    "
-	}
+        }
 
-	# Display the material if we have materials enabled for invoice line items
-	if {$material_enabled_p} {
-	    if {"" != $item_material_id && 12812 != $item_material_id} {
-		set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
-	    } else {
-		set item_material ""
-	    }
-	    append invoice_item_html "
+	    # Display the material if we have materials enabled for invoice line items
+        if {$material_enabled_p} {
+	        if {"" != $item_material_id && 12812 != $item_material_id} {
+                set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
+            } else {
+                set item_material ""
+            }
+            append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2])>$item_material</td>
 	    "
-	}	    
+        }	    
 
-	if {$show_qty_rate_p} {
-	    append invoice_item_html "
+        if {$show_qty_rate_p} {
+            append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$item_units_pretty</td>
 	          <td $bgcolor([expr $ctr % 2]) align=left>[lang::message::lookup $locale intranet-core.$item_uom $item_uom]</td>
 	          <td $bgcolor([expr $ctr % 2]) align=right>$price_per_unit_pretty&nbsp;$currency</td>
 	        "
-	}
+        }
 	
-	if {$show_company_project_nr} {
-	    # Only if intranet-translation has added the field
-	    append invoice_item_html "
+        if {$show_company_project_nr} {
+	        # Only if intranet-translation has added the field
+            append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=left>$company_project_nr</td>\n"
-	}
+        }
 	
-	if {$show_our_project_nr} {
-	    append invoice_item_html "
+        if {$show_our_project_nr} {
+	        append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=left>$project_short_name</td>\n"
-	}
+        }
 	
-	append invoice_item_html "
+        append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency</td>
 		</tr>"
 	
 	    # Insert a new XML table row into OpenOffice document
 	    if {"odt" == $template_type} {
-		ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
-		set lines [split $odt_row_template_xml \n]
-		foreach line $lines {
-		    set var_to_be_escaped ""
-		    regexp -nocase {@(.*?)@} $line var_to_be_escaped
-		    regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
-		    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-		    lappend vars_escaped $var_to_be_escaped
-		    if { "" != $var_to_be_escaped  } {
-			set value [eval "set value \"$$var_to_be_escaped\""]
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
-			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
-			eval $cmd
-		    }
-		}
+            ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
+            set lines [split $odt_row_template_xml \n]
+            foreach line $lines {
+		        set var_to_be_escaped ""
+                regexp -nocase {@(.*?)@} $line var_to_be_escaped
+                regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
+                regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
+                lappend vars_escaped $var_to_be_escaped
+                if { "" != $var_to_be_escaped  } {
+                    set value [eval "set value \"$$var_to_be_escaped\""]
+                    ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
+                    set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
+                    ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
+                    eval $cmd
+                }
+            }
 		
-		set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
-		# Replace placeholders in the OpenOffice template row with values
-		eval [template::adp_compile -string $odt_row_template_xml]
-		set odt_row_xml $__adp_output
-	
-		# Parse the new row and insert into OOoo document
-		set row_doc [dom parse $odt_row_xml]
-		set new_row [$row_doc documentElement]
-		$odt_template_table_node insertBefore $new_row $odt_template_row_node
+            set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
+            # Replace placeholders in the OpenOffice template row with values
+            eval [template::adp_compile -string $odt_row_template_xml]
+            set odt_row_xml $__adp_output
+            
+            # Parse the new row and insert into OOoo document
+            set row_doc [dom parse $odt_row_xml]
+            set new_row [$row_doc documentElement]
+            $odt_template_table_node insertBefore $new_row $odt_template_row_node
 
-	    }
+        }
 	
 	    incr ctr
-	}
-	
-	incr ctr
+        
     }
     
 } elseif { 100 == $item_list_type } {
