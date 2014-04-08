@@ -128,10 +128,10 @@ if {"" == $view_name} {
     # customers or providers
     set view_name "invoice_list"
     if {$cost_type_id == [im_cost_type_company_doc] || [im_category_is_a $cost_type_id [im_cost_type_company_doc]]} {
-	set view_name "invoice_customer_list"
+	    set view_name "invoice_customer_list"
     }
     if {$cost_type_id == [im_cost_type_provider_doc] || [im_category_is_a $cost_type_id [im_cost_type_provider_doc]]} {
-	set view_name "invoice_provider_list"
+	    set view_name "invoice_provider_list"
     }
 }
 
@@ -169,11 +169,11 @@ set column_vars [list]
 set extra_select_sql ""
 db_foreach column_list_sql $column_sql {
     if {"" == $visible_for || [eval $visible_for]} {
-	lappend column_headers "$column_name"
-	lappend column_vars "$column_render_tcl"
-	if {"" != $extra_select} {
-	    append extra_select_sql ",$extra_select"
-	}
+	    lappend column_headers "$column_name"
+	    lappend column_vars "$column_render_tcl"
+	    if {"" != $extra_select} {
+	        append extra_select_sql ",$extra_select"
+	    }
     }
 }
 
@@ -226,6 +226,7 @@ set company_where ""
 if {![im_permission $user_id view_invoices]} { 
     set company_where "and (i.customer_id in ([join $company_ids ","]) or i.provider_id in ([join $company_ids ","]))"
 }
+
 ns_log Notice "/intranet-invoices/index: company_where=$company_where"
 
 set counter_reset_expression ""
@@ -237,37 +238,37 @@ set order_by_clause ""
 
 switch $order_by {
     "Document No" { 
-	set order_by_clause "order by invoice_nr DESC" 
-	set counter_reset_expression {$effective_month}
+        set order_by_clause "order by invoice_nr DESC" 
+        set counter_reset_expression {$effective_month}
     }
     "Preview" { 
-	set order_by_clause "order by invoice_nr" 
+        set order_by_clause "order by invoice_nr" 
     }
     "Provider" { 
-	set order_by_clause "order by provider_name" 
-	set counter_reset_expression {$provider_id}
+        set order_by_clause "order by provider_name" 
+        set counter_reset_expression {$provider_id}
     }
     "Customer" { 
-	set order_by_clause "order by customer_name" 
-	set counter_reset_expression {$customer_id}
+        set order_by_clause "order by customer_name" 
+        set counter_reset_expression {$customer_id}
     }
     "Due Date" { 
-	set order_by_clause "order by (ci.effective_date)" 
-	set counter_reset_expression {$effective_month}
+        set order_by_clause "order by (ci.effective_date)" 
+        set counter_reset_expression {$effective_month}
     }
     "Amount" { 
-	set order_by_clause "order by ci.amount" 
+        set order_by_clause "order by ci.amount" 
     }
     "Paid" { 
-	set order_by_clause "order by ci.paid_amount" 
+        set order_by_clause "order by ci.paid_amount" 
     }
     "Status" { 
-	set order_by_clause "order by cost_status_id" 
-	set counter_reset_expression {$cost_status_id}
+        set order_by_clause "order by cost_status_id" 
+        set counter_reset_expression {$cost_status_id}
     }
     "Type" { 
-	set order_by_clause "order by cost_type" 
-	set counter_reset_expression {$cost_type_id}
+        set order_by_clause "order by cost_type" 
+        set counter_reset_expression {$cost_type_id}
     }
     "Effective Date" {
         set order_by_clause "order by cost_effective_date DESC"
@@ -275,6 +276,7 @@ switch $order_by {
 }
 
 set where_clause [join $criteria " and\n            "]
+
 if { ![empty_string_p $where_clause] } {
     set where_clause " and $where_clause"
 }
@@ -379,37 +381,6 @@ if {[string equal $letter "ALL"]} {
     set selection [im_select_row_range $sql $start_idx $end_idx]
 }
 
-
-
-# ---------------------------------------------------------------
-# 6a. Format the Filter: Get the admin menu
-# ---------------------------------------------------------------
-
-if {"" != $parent_menu_label} {
-    set parent_menu_sql "select menu_id from im_menus where label=:parent_menu_label"
-    set parent_menu_id [db_string parent_admin_menu $parent_menu_sql -default ""]
-
-    set menu_select_sql "
-        select  m.*
-        from    im_menus m
-        where   parent_menu_id in (select menu_id from im_menus where label in ($parent_menu_sql)) 
-                and im_object_permission_p(m.menu_id, :user_id, 'read') = 't'
-        order by sort_order"
-
-# Start formatting the menu bar
-set new_document_menu "<ul>"
-set ctr 0
-db_foreach menu_select $menu_select_sql {
-    ns_log Notice "im_sub_navbar: menu_name='$name'"
-    regsub -all " " $name "_" name_key
-    set name_loc [lang::message::lookup "" $package_name.$name_key $name]
-    append new_document_menu "<li><a href=\"$url\">$name_loc</a></li>\n"
-    incr ctr
-}
-append new_document_menu "</ul>"
-if {0 == $ctr} { set new_document_menu "" }
-
-
 # ---------------------------------------------------------------
 # 6. Format the Filter
 # ---------------------------------------------------------------
@@ -478,9 +449,9 @@ foreach col $column_headers {
     set col_loc [lang::message::lookup ""  intranet-invoices.$col_key $col]
 
     if {[string compare $order_by $col] == 0 || [regexp {input} $col match]} {
-	append table_header_html "  <td class=rowtitle>$col_loc</td>\n"
+        append table_header_html "  <td class=rowtitle>$col_loc</td>\n"
     } else {
-	append table_header_html "  <td class=rowtitle><a href=\"${url}order_by=[ns_urlencode $col]\">$col_loc</a></td>\n"
+        append table_header_html "  <td class=rowtitle><a href=\"${url}order_by=[ns_urlencode $col]\">$col_loc</a></td>\n"
     }
 }
 append table_header_html "</tr>\n"
@@ -519,20 +490,20 @@ db_foreach invoices_info_query $selection {
 
     set url [im_maybe_prepend_http $url]
     if { [empty_string_p $url] } {
-	set url_string "&nbsp;"
+        set url_string "&nbsp;"
     } else {
-	set url_string "<a href=\"$url\">$url</a>"
+        set url_string "<a href=\"$url\">$url</a>"
     }
 
+    ds_comment "$cost_id :: $paid_amount"
     # Translate the categories
     set cost_type [im_category_from_id $cost_type_id]
     set cost_status [im_category_from_id $cost_status_id]
     set invoice_status [im_category_from_id $invoice_status_id]
 
     # Don't show paid invices over due in red:
-    if {$invoice_status_id == [im_cost_status_paid] || \
-	$invoice_status_id == [im_cost_status_filed]} {
-	set overdue 0
+    if {$invoice_status_id == [im_cost_status_paid] || $invoice_status_id == [im_cost_status_filed]} {
+        set overdue 0
     }
 
     # paid_amount="" => paid_amount=0
@@ -547,8 +518,8 @@ db_foreach invoices_info_query $selection {
 
     set write_p [im_cost_center_write_p $cost_center_id $cost_type_id $user_id]
     if {!$write_p} {
-	set status_select ""
-	# Bad Trick: " " let the Del-checkbox disappear...
+        set status_select ""
+        # Bad Trick: " " let the Del-checkbox disappear...
         if {"" == $payment_amount} { set payment_amount " " }
     }
 
@@ -557,10 +528,10 @@ db_foreach invoices_info_query $selection {
     # Append together a line of data based on the "column_vars" parameter list
     append table_body_html "<tr$bgcolor([expr $ctr % 2])>\n"
     foreach column_var $column_vars {
-	append table_body_html "\t<td valign=top>"
-	set cmd "append table_body_html $column_var"
-	eval $cmd
-	append table_body_html "</td>\n"
+        append table_body_html "\t<td valign=top>"
+        set cmd "append table_body_html $column_var"
+        eval $cmd
+        append table_body_html "</td>\n"
     }
     append table_body_html "</tr>\n"
 
@@ -568,7 +539,7 @@ db_foreach invoices_info_query $selection {
 
     incr ctr
     if { $how_many > 0 && $ctr > $how_many } {
-	break
+	    break
     }
     incr idx
 }
@@ -618,6 +589,7 @@ set table_continuation_html "
 set invoice_options [list "<option value=save>[lang::message::lookup "" intranet-invoices.Save_Changes "Save Changes"]</option>\n"]
 lappend invoice_options "<option value=del>[lang::message::lookup "" intranet-invoices.Delete "Delete"]</option>\n"
 set options_sql "select * from im_cost_status"
+
 db_foreach options $options_sql {
     regsub -all " " $cost_status "_" cost_status_mangled
     lappend invoice_options "<option value=status_$cost_status_id>[lang::message::lookup "" intranet-invoices.Set_to_status_$cost_status_mangled "Set to $cost_status"]</option>"

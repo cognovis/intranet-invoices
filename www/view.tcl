@@ -275,28 +275,28 @@ set num_related_projects 0
 db_foreach related_projects $related_projects_sql {
     lappend related_projects $project_id
     if {"" != $project_nr} { 
-	lappend related_project_nrs $project_nr 
+	    lappend related_project_nrs $project_nr 
     }
     if {"" != $project_name} { 
-	lappend related_project_names $project_name 
+        lappend related_project_names $project_name 
     }
     
     if {"" != $description && 0 == $num_related_projects} {
         append related_project_descriptions $description
     } else {
-	append related_project_descriptions ", $description"
+        append related_project_descriptions ", $description"
     }
 
     # Check of the "customer project nr" of the superproject, as the PMs
     # are probably too lazy to maintain it in the subprojects...
     set cnt 0
     while {[string equal "" $customer_project_nr] && ![string equal "" $parent_id] && $cnt < 10} {
-	set customer_project_nr [db_string custpn "select company_project_nr from im_projects where project_id = :parent_id" -default ""]
-	set parent_id [db_string parentid "select parent_id from im_projects where project_id = :parent_id" -default ""]
-	incr cnt
+        set customer_project_nr [db_string custpn "select company_project_nr from im_projects where project_id = :parent_id" -default ""]
+        set parent_id [db_string parentid "select parent_id from im_projects where project_id = :parent_id" -default ""]
+        incr cnt
     }
     if {"" != $customer_project_nr} { 
-	lappend related_customer_project_nrs $customer_project_nr 
+        lappend related_customer_project_nrs $customer_project_nr 
     }
     incr num_related_projects
 }
@@ -385,9 +385,9 @@ if { ![db_0or1row invoice_info_query $query] } {
     # Check if there is a cost item with this ID and forward
     set cost_exists_p [db_string cost_ex "select count(*) from im_costs where cost_id = :invoice_id"]
     if {$cost_exists_p} { 
-	ad_returnredirect [export_vars -base "/intranet-cost/costs/new" {{form_mode display} {cost_id $invoice_id}}] 
+        ad_returnredirect [export_vars -base "/intranet-cost/costs/new" {{form_mode display} {cost_id $invoice_id}}] 
     } else {
-	ad_return_complaint 1 "[lang::message::lookup $locale intranet-invoices.lt_Cant_find_the_documen]"
+        ad_return_complaint 1 "[lang::message::lookup $locale intranet-invoices.lt_Cant_find_the_documen]"
     }
     return
 }
@@ -542,7 +542,7 @@ if {0 != $render_template_id} {
 
     # New convention, "invoice.en_US.adp"
     if {[regexp {(.*)\.([_a-zA-Z]*)\.([a-zA-Z][a-zA-Z][a-zA-Z])} $template match body loc template_type]} {
-	set locale $loc
+	    set locale $loc
     }
 }
 
@@ -639,19 +639,19 @@ if {"odt" == $template_type} {
     # Search for the table that contains "@item_name_pretty"
     set odt_template_table_node ""
     foreach table_node $odt_table_nodes {
-	set table_as_list [$table_node asList]
-	if {[regexp {item_units_pretty} $table_as_list match]} { set odt_template_table_node $table_node }
+        set table_as_list [$table_node asList]
+	    if {[regexp {item_units_pretty} $table_as_list match]} { set odt_template_table_node $table_node }
     }
 
     # Deal with the the situation that we didn't find the line
     if {"" == $odt_template_table_node} {
-	ad_return_complaint 1 "
+        ad_return_complaint 1 "
 		<b>Didn't find table including '@item_units_pretty'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a table with the value
 		above.
 	"
-	ad_script_abort
+        ad_script_abort
     }
 
     # Search for the 2nd table:table-row tag
@@ -659,19 +659,19 @@ if {"odt" == $template_type} {
     set odt_template_row_node ""
     set odt_template_row_count 0
     foreach row_node $odt_table_rows_nodes {
-	set row_as_list [$row_node asList]
-	if {[regexp {item_units_pretty} $row_as_list match]} { set odt_template_row_node $row_node }
-	incr odt_template_row_count
+        set row_as_list [$row_node asList]
+        if {[regexp {item_units_pretty} $row_as_list match]} { set odt_template_row_node $row_node }
+        incr odt_template_row_count
     }
 
     if {"" == $odt_template_row_node} {
-	ad_return_complaint 1 "
+	    ad_return_complaint 1 "
 		<b>Didn't find row including '@item_units_pretty'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a row with the value
 		above.
 	"
-	ad_script_abort
+        ad_script_abort
     }
 
     # Convert the tDom tree into XML for rendering

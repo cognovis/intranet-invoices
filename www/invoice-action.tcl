@@ -58,28 +58,32 @@ switch $invoice_action {
 	}
     }
     del {
-	foreach cost_id $cost {
-	    set otype [db_string object_type "select object_type from acs_objects where object_id = :cost_id" -default ""]
-	    if {"" == $otype} { continue }
+	    foreach cost_id $cost {
+	        set otype [db_string object_type "select object_type from acs_objects where object_id = :cost_id" -default ""]
+            if {"" == $otype} { continue }
 	    
-	    # Check CostCenter Permissions
-	    im_cost_permissions $user_id $cost_id view_p read_p write_p admin_p
-	    if {!$write_p} {
-		ad_return_complaint 1 "<li>You have insufficient privileges to perform this action"
-		ad_script_abort
-	    }
-	    im_audit -object_id $cost_id -action before_delete
+            # Check CostCenter Permissions
+            im_cost_permissions $user_id $cost_id view_p read_p write_p admin_p
+            if {!$write_p} {
+                ad_return_complaint 1 "<li>You have insufficient privileges to perform this action"
+                ad_script_abort
+            }
+            im_audit -object_id $cost_id -action before_delete
+            
             # Update content_items
             set content_item_ids [db_list content_items "select item_id from cr_items where parent_id = :cost_id"]
-            setproject_id [db_string project_id "select project_id from im_costs where cost_id = :cost_id" -default "0"]
-            db_dml context "update acs_object_context_index set ancestor_id = :project_id where ancestor_id = :cost_id"
-	    db_dml context "update acs_objects set context_id = :project_id where context_id = :cost_id"
-	    foreach content_item_id $content_item_ids {
-                content::item::update -item_id $content_item_id -attributes [list [list parent_id $project_id]]
-                acs_object::set_context_id -object_id $content_item_id -context_id $project_id
+            set project_id [db_string project_id "select project_id from im_costs where cost_id = :cost_id" -default ""]
+            if {$project_id ne ""} {
+                db_dml context "update acs_object_context_index set ancestor_id = :project_id where ancestor_id = :cost_id"
+                db_dml context "update acs_objects set context_id = :project_id where context_id = :cost_id"
+            
+                foreach content_item_id $content_item_ids {
+                    content::item::update -item_id $content_item_id -attributes [list [list parent_id $project_id]]
+                    acs_object::set_context_id -object_id $content_item_id -context_id $project_id
+                }
             }
-	    db_string delete_cost_item ""
-	}
+            db_string delete_cost_item ""
+        }
     }
     status {
 	foreach cost_id $cost {
