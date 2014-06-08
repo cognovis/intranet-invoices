@@ -77,6 +77,7 @@ set return_url [im_url_with_query]
 set amp "&"
 set cur_format [im_l10n_sql_currency_format]
 set date_format [im_l10n_sql_date_format]
+set default_currency [ad_parameter -package_id [im_package_cost_id] "DefaultCurrency" "" "EUR"]
 set local_url "/intranet-invoices/list"
 set cost_status_created [im_cost_status_created]
 set cost_type [db_string get_cost_type "select category from im_categories where category_id=:cost_type_id" -default [_ intranet-invoices.Costs]]
@@ -301,7 +302,7 @@ select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
 	o.object_type,
-        to_char(ci.effective_date, 'YYYY-MM-DD') cost_effective_date,
+        to_char(ci.effective_date, 'YYYY-MM-DD') as cost_effective_date,
 	(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
@@ -314,6 +315,7 @@ select
       	im_name_from_user_id(i.company_contact_id) as company_contact_name,
 	im_cost_center_code_from_id(ci.cost_center_id) as cost_center_code,
 	im_cost_center_name_from_id(ci.cost_center_id) as cost_center_name,
+	c.company_id as invoice_company_id,
         c.company_name as customer_name,
         c.company_path as company_short_name,
 	p.company_name as provider_name,
@@ -454,6 +456,9 @@ foreach col $column_headers {
         append table_header_html "  <td class=rowtitle><a href=\"${url}order_by=[ns_urlencode $col]\">$col_loc</a></td>\n"
     }
 }
+
+# Add input field 
+
 append table_header_html "</tr>\n"
 
 
@@ -488,6 +493,19 @@ callback im_invoices_index_before_render -view_name $view_name \
 
 db_foreach invoices_info_query $selection {
 
+    # Provide PRETTY 'payment amount' 
+    if { "" != $payment_amount} { 
+	if {[catch {
+	    set payment_amount_pretty [lc_numeric $payment_amount "%.2f" "en_US"]
+	} err_msg]} {
+	    global errorInfo
+	    ns_log Error $errorInfo
+	    set payment_amount_pretty ""
+	}
+    } else {
+	set payment_amount_pretty [lc_numeric 0 "%.2f" "en_US"]
+    } 
+
     set url [im_maybe_prepend_http $url]
     if { [empty_string_p $url] } {
         set url_string "&nbsp;"
@@ -513,7 +531,7 @@ db_foreach invoices_info_query $selection {
     if {$payment_amount eq ""} { set payment_currency ""}
     # ---- Deal with non-writable Invoices ----
 
-    # Calculate the statu-select drop-down for this invoice
+    # Calculate the status-select drop-down for this invoice
     set status_select [im_cost_status_select "cost_status.$invoice_id" $invoice_status_id]
 
     set write_p [im_cost_center_write_p $cost_center_id $cost_type_id $user_id]
@@ -523,8 +541,18 @@ db_foreach invoices_info_query $selection {
         if {"" == $payment_amount} { set payment_amount " " }
     }
 
-    # ---- Display the main line ----
+    # ---- Set vars for "bulk payments"  ----
+    set new_payment_amount "<input size='8' name='new_payment_amount.$invoice_id' id='new_payment_amount.$invoice_id' amount='[string trim $invoice_amount_formatted]'"
+    append new_payment_amount " style='text-align:right;' onclick='javascript:setAmount(this)'/>" 
+    append new_payment_amount [im_currency_select "new_payment_currency.$invoice_id" $default_currency]
 
+    set new_payment_type_id "[im_payment_type_select new_payment_type_id.$invoice_id ""]<input type='hidden' name='new_payment_company_id.$invoice_id' value='$invoice_company_id' />"
+
+    set new_payment_date "<input name=\"new_payment_date.$invoice_id\" id=\"new_payment_date.$invoice_id\" value=\"[clock format [clock seconds] -format {%Y-%m-%d}]\" size=\"10\" "
+    append new_payment_date "type=\"textfield\"><input style=\"height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');\" " 
+    append new_payment_date "onclick=\"return showCalendar('new_payment_date.$invoice_id', 'y-m-d');\" type=\"button\">"
+
+    # ---- Display the main line ----
     # Append together a line of data based on the "column_vars" parameter list
     append table_body_html "<tr$bgcolor([expr $ctr % 2])>\n"
     foreach column_var $column_vars {

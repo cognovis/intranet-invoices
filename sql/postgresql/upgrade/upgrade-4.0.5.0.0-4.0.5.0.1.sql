@@ -9,4 +9,8 @@ SELECT im_category_hierarchy_new(3732,3708);
 -- Provider Receipt is a Provider Document
 SELECT im_category_hierarchy_new(3734,3710);
 
+-- Add category that marks the VAT to be calculated on line item level
+SELECT im_category_new (42021,'Material Based Taxation','Intranet VAT Type');
+update im_categories set aux_int1=0 where category_id = 42021;
+
 

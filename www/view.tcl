@@ -999,22 +999,23 @@ if { 0 == $item_list_type } {
 	
 	    # Insert a new XML table row into OpenOffice document
 	    if {"odt" == $template_type} {
-            ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
-            set lines [split $odt_row_template_xml \n]
-            foreach line $lines {
-		        set var_to_be_escaped ""
-                regexp -nocase {@(.*?)@} $line var_to_be_escaped
-                regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
-                regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-                lappend vars_escaped $var_to_be_escaped
-                if { "" != $var_to_be_escaped  } {
-                    set value [eval "set value \"$$var_to_be_escaped\""]
-                    ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
-                    set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
-                    ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
-                    eval $cmd
-                }
-            }
+		ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
+		set lines [split $odt_row_template_xml \n]
+		foreach line $lines {
+		    set var_to_be_escaped ""
+		    regexp -nocase {@(.*?)@} $line var_to_be_escaped
+		    regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
+		    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
+		    lappend vars_escaped $var_to_be_escaped
+		    if { "" != $var_to_be_escaped  } {
+			set value [eval "set value \"$$var_to_be_escaped\""]
+			set value [string map {\[ "\\[" \] "\\]"} $value]
+			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
+			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
+			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
+			eval $cmd
+		    }
+		}
 		
             set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
             # Replace placeholders in the OpenOffice template row with values

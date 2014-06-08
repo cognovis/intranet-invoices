@@ -21,7 +21,7 @@ ad_library {
 
 ad_proc -public im_package_invoices_id { } {
 } {
-    return [util_memoize "im_package_invoices_id_helper"]
+    return [util_memoize im_package_invoices_id_helper]
 }
 
 ad_proc -private im_package_invoices_id_helper {} {
@@ -85,7 +85,7 @@ ad_proc -public im_invoice_rounding_factor {
     Gets the right rounding factor per currency.
     A rf (rounding factor) of 100 indicates two digits after the decimal separator precision.
 } {
-    return [util_memoize "im_invoice_rounding_factor_helper -currency $currency"]
+    return [util_memoize [list im_invoice_rounding_factor_helper -currency $currency]]
 }
 
 ad_proc -public im_invoice_rounding_factor_helper {
@@ -731,6 +731,7 @@ ad_proc -public im_invoice_permissions {
     Fill the "by-reference" variables read, write and admin
     with the permissions of $current_user_id on $user_id
 } {
+    im_security_alert_check_integer -location "im_invoice_permissions: user_id" -value $user_id
     upvar $view_var view
     upvar $read_var read
     upvar $write_var write
@@ -746,7 +747,7 @@ ad_proc -public im_invoice_permissions {
 
     # Admins and creators can do everything
     set user_is_admin_p [im_is_user_site_wide_or_intranet_admin $current_user_id]
-    set creation_user_id [util_memoize "db_string creator {select creation_user from acs_objects where object_id = $user_id} -default 0"]
+    set creation_user_id [util_memoize [list db_string creator "select creation_user from acs_objects where object_id = $user_id" -default 0]]
     if {$user_is_admin_p || $current_user_id == $creation_user_id} {
         set view 1
         set read 1
