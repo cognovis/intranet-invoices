@@ -301,14 +301,13 @@ set sql "
 select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
-	o.object_type,
         to_char(ci.effective_date, 'YYYY-MM-DD') as cost_effective_date,
 	(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
 	to_char(ci.paid_amount,:cur_format) as payment_amount_formatted,
 	ci.paid_currency as payment_currency,
-	pr.project_nr,
+--	pr.project_nr,
 	to_char(ci.effective_date, 'YYYY-MM') as effective_month,
 	to_char(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100), :cur_format) as invoice_amount_formatted,
     	im_email_from_user_id(i.company_contact_id) as company_contact_email,
@@ -325,7 +324,7 @@ select
 from
         im_invoices_active i,
         im_costs ci
-	LEFT OUTER JOIN im_projects pr on (ci.project_id = pr.project_id)
+--	LEFT OUTER JOIN im_projects pr on (ci.project_id = pr.project_id)
 	left outer join (	select distinct
 			cc.cost_center_id,
 			ct.cost_type_id
@@ -344,13 +343,11 @@ from
 			and p.grantee_id = m.party_id
 	) readable_ccs on (ci.cost_center_id = readable_ccs.cost_center_id
 	and ci.cost_type_id = readable_ccs.cost_type_id),
-	acs_objects o,
         im_companies c,
         im_companies p
 	$extra_from
 where
-	i.invoice_id = o.object_id
-	and i.invoice_id = ci.cost_id
+	i.invoice_id = ci.cost_id
  	and i.customer_id=c.company_id
         and i.provider_id=p.company_id
 	$company_where
