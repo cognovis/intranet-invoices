@@ -312,6 +312,7 @@ if {1 == [llength $related_projects]} {
 # ---------------------------------------------------------------
 
 set internal_company_id [im_company_internal]
+
 db_1row internal_company_info "
 	select
 		c.company_name as internal_name,
@@ -925,8 +926,10 @@ set colspan [expr 2 + 1*$material_enabled_p + 3*$show_qty_rate_p + 1*$show_compa
 set oo_table_xml ""
 
 set source_invoice_ids [list]
+set line_item_vat_ids [list]
 if { 0 == $item_list_type } {
     db_foreach invoice_items {} {
+        
 	    # $company_project_nr is normally related to each invoice item,
         # because invoice items can be created based on different projects.
         # However, frequently we only have one project per invoice, so that
@@ -994,8 +997,31 @@ if { 0 == $item_list_type } {
         }
 	
         append invoice_item_html "
-	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency</td>
-		</tr>"
+	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency"
+		
+        # If we have a material based taxation, add the VAT now
+        if {$vat_type_id == 42021} {
+            
+           set vat [db_string vat {
+               select ct.aux_int1 as vat
+               from im_categories cm, im_categories ct, im_invoice_items ii, im_materials im
+               where cm.aux_int2 = ct.category_id
+               and ii.item_material_id = im.material_id
+               and im.material_type_id = cm.category_id
+               and ii.item_id = :item_id
+               } -default ""]
+               
+           if {$vat ne ""} {  
+               append invoice_item_html " (${vat}% VAT)"
+               
+               if {[lsearch $line_item_vat_ids $vat]<0} { 
+                   lappend line_item_vat_ids $vat
+               }
+           }
+        }
+        
+        append invoice_item_html "</td></tr>"
+        
 	
 	    # Insert a new XML table row into OpenOffice document
 	    if {"odt" == $template_type} {
@@ -1581,6 +1607,18 @@ if {"" == $tax} { set tax 0}
 # Calculate grand total based on the same inner SQL
 db_1row calc_grand_total ""
 
+# Overwrite for material based calculation
+if {$vat_type_id == 42021} {
+    set vat_amount [db_string total "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2))
+                                                 from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
+                                                where invoice_id = :invoice_id
+                                                  and ca.category_id = material_type_id
+                                                  and ii.item_material_id = im.material_id
+                                                  and ca.aux_int2 = cb.category_id"
+                    ]
+    set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
+    set total_due [expr $vat_amount + $subtotal]
+}
 set subtotal_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $subtotal+0] $rounding_precision] "" $locale]
 set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
 set tax_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $tax_amount+0] $rounding_precision] "" $locale]
@@ -1608,12 +1646,33 @@ set subtotal_item_html "
 
 
 if {"" != $vat && 0 != $vat} {
-    append subtotal_item_html "
+    if {[llength $line_item_vat_ids]>1} {
+        foreach vat_id $line_item_vat_ids {
+             set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
+                                                         from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
+                                                        where invoice_id = :invoice_id
+                                                          and ca.category_id = material_type_id
+                                                          and ii.item_material_id = im.material_id
+                                                          and ca.aux_int2 = cb.category_id
+                                                          and cb.aux_int1 = :vat_id" -default ""]
+            set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
+            set vat_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_id+0] $rounding_precision] "" $locale]
+            append subtotal_item_html "
+            <tr>
+              <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
+              <td class=roweven align=right>$vat_amount_pretty $currency</td>
+            </tr>
+            "
+        }
+    
+    } else {
+        append subtotal_item_html "
         <tr>
           <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
           <td class=roweven align=right>$vat_amount_pretty $currency</td>
         </tr>
-"
+        "
+    }
 } else {
     append subtotal_item_html "
         <tr>
