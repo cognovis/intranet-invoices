@@ -317,6 +317,8 @@ select
 	c.company_id as invoice_company_id,
         c.company_name as customer_name,
         c.company_path as company_short_name,
+        c.primary_contact_id,
+        c.accounting_contact_id,
 	p.company_name as provider_name,
 	p.company_path as provider_short_name,
 	to_date(:today, :date_format) - (to_date(to_char(i.invoice_date, :date_format),:date_format) + i.payment_days) as overdue
@@ -490,6 +492,17 @@ callback im_invoices_index_before_render -view_name $view_name \
 
 db_foreach invoices_info_query $selection {
 
+    if {$company_contact_id eq ""} {
+	set company_contact_id $accounting_contact_id
+	if {"" == $company_contact_id} { 
+	    set company_contact_id $primary_contact_id 
+	}
+	db_dml update_company_contact "update im_invoices set company_contact_id = :company_contact_id where invoice_id = :invoice_id"
+	set company_contact_email [party::email -party_id $company_contact_id]
+    }
+
+
+	
     # Provide PRETTY 'payment amount' 
     if { "" != $payment_amount} { 
 	if {[catch {

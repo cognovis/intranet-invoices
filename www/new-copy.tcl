@@ -187,8 +187,13 @@ if {[im_column_exists im_companies default_tax]} {
 if {"" == $vat} { set vat $default_vat }
 if {"" == $tax} { set tax $default_tax }
 if {"" == $payment_days} { set payment_days $default_payment_days }
+set company_payment_term_id [db_string default_payment_days "select payment_term_id from im_companies where company_id = :company_id" -default ""]
+if {"" != $company_payment_term_id && "" == $payment_term_id} {
+    set payment_term_id $company_payment_term_id
+}
 if {"" == $payment_method_id} { set payment_method_id $default_payment_method_id }
 
+set payment_term_select [im_category_select_plain "Intranet Payment Term" payment_term_id $payment_term_id]
 
 # Default for template: Get it from the company
 set template_id [im_invoices_default_company_template $target_cost_type_id $company_id]
