@@ -293,6 +293,11 @@ set target_language_id ""
 set task_sum_html ""
 db_foreach invoice_items "" {
 
+    # Reverse the item units for correction invoices 
+    
+    if {$current_cost_type_id eq [im_cost_type_correction_invoice]} {
+        set item_units [expr $item_units * -1]
+    }
     # insert intermediate headers for every project
     if {$old_project_id != $project_id} {
 	append task_sum_html "

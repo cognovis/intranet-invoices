@@ -1515,6 +1515,10 @@ if {$linked_invoice_ids eq ""} {
     # this might be a parent, try it again for children
     set linked_invoice_ids [relation::get_objects -object_id_one $invoice_id -rel_type "im_invoice_invoice_rel"]
 }
+
+# Check if any of the linked invoices is a correction invoice. If this is the case, delete the edit and edit actions for the invoice
+set correction_invoice_exists_p 0
+
 if {$linked_invoice_ids ne ""} {
 
     set linked_list_html "
@@ -1529,7 +1533,8 @@ if {$linked_invoice_ids ne ""} {
 select
 	invoice_id as linked_invoice_id,
         invoice_nr as linked_invoice_nr,
-        effective_date as linked_effective_date
+        effective_date as linked_effective_date,
+        cost_type_id as linked_cost_type_id
 from
 	im_invoices, im_costs
 where
@@ -1539,14 +1544,17 @@ where
 
     set linked_ctr 0
     db_foreach linked_list $linked_list_sql {
-	append linked_list_html "
+        if {$linked_cost_type_id == [im_cost_type_correction_invoice]} {
+            set correction_invoice_exists_p 1
+        }
+        append linked_list_html "
         <tr $bgcolor([expr $linked_ctr % 2])>
           <td>
 	    <A href=/intranet-invoices/view?invoice_id=$linked_invoice_id>
 	      $linked_invoice_nr
  	    </A>
 	  </td></tr>\n"
-	incr linked_ctr
+        incr linked_ctr
     }
 
     if {!$linked_ctr} {
