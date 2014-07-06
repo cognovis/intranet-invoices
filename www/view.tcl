@@ -39,26 +39,6 @@ ad_page_contract {
     { expiry_date ""}
 }
 
-# Note: 
-# output_format = "pdf" used to work with im_html2pdf, an option that probably hadn't been used a lot
-# When we started experimenting using OO headless to create pdfs, parameter pdf_p had been added 
-# As of 10/2013 many clients use OO/LibreOffice for PDF creation successfully 
-# It's up to Frank to decide if we keep the im_html2pdf option. 
-# Based on his decision the code should be cleaned up
-
-# ---------------------------------------------------------------
-# Helper Procs
-# ---------------------------------------------------------------
-
-proc encodeXmlValue {value} {
-    regsub -all {&} $value {&amp;} value
-    regsub -all {"} $value {&quot;} value; # "
-    # regsub -all {'} $value {&apos;} value
-    regsub -all {<} $value {&lt;} value
-    regsub -all {>} $value {&gt;} value
-    return $value
-}
-
 # ---------------------------------------------------------------
 # Defaults & Security
 # ---------------------------------------------------------------
@@ -1023,35 +1003,17 @@ if { 0 == $item_list_type } {
         append invoice_item_html "</td></tr>"
         
 	
-	    # Insert a new XML table row into OpenOffice document
-	    if {"odt" == $template_type} {
-		ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
-		set lines [split $odt_row_template_xml \n]
-		foreach line $lines {
-		    set var_to_be_escaped ""
-		    regexp -nocase {@(.*?)@} $line var_to_be_escaped
-		    regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
-		    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-		    lappend vars_escaped $var_to_be_escaped
-		    if { "" != $var_to_be_escaped  } {
-			set value [eval "set value \"$$var_to_be_escaped\""]
-			set value [string map {\[ "\\[" \] "\\]"} $value]
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
-			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
-			eval $cmd
-		    }
-		}
-		
-            set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
-            # Replace placeholders in the OpenOffice template row with values
-            eval [template::adp_compile -string $odt_row_template_xml]
-            set odt_row_xml $__adp_output
-            
-            # Parse the new row and insert into OOoo document
-            set row_doc [dom parse $odt_row_xml]
-            set new_row [$row_doc documentElement]
-            $odt_template_table_node insertBefore $new_row $odt_template_row_node
+	# Insert a new XML table row into OpenOffice document
+	if {"odt" == $template_type} {
+	    set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
+	    # Replace placeholders in the OpenOffice template row with values
+	    eval [template::adp_compile -string $odt_row_template_xml]
+	    set odt_row_xml [intranet_oo::convert -content $__adp_output]
+	    
+	    # Parse the new row and insert into OOoo document
+	    set row_doc [dom parse $odt_row_xml]
+	    set new_row [$row_doc documentElement]
+	    $odt_template_table_node insertBefore $new_row $odt_template_row_node
 
         }
 	

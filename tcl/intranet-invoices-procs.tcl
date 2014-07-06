@@ -1121,3 +1121,23 @@ where
 
     return $invoice_id
 }
+
+# Note: 
+# output_format = "pdf" used to work with im_html2pdf, an option that probably hadn't been used a lot
+# When we started experimenting using OO headless to create pdfs, parameter pdf_p had been added 
+# As of 10/2013 many clients use OO/LibreOffice for PDF creation successfully 
+# It's up to Frank to decide if we keep the im_html2pdf option. 
+# Based on his decision the code should be cleaned up
+
+# ---------------------------------------------------------------
+# Helper Procs
+# ---------------------------------------------------------------
+
+ad_proc -public encodeXmlValue {value} {
+    regsub -all {&} $value {&amp;} value
+#    regsub -all {"} $value {&quot;} value; # "
+    # regsub -all {'} $value {&apos;} value
+    regsub -all {<} $value {&lt;} value
+    regsub -all {>} $value {&gt;} value
+    return $value
+}
