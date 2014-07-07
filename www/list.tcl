@@ -523,7 +523,6 @@ db_foreach invoices_info_query $selection {
         set url_string "<a href=\"$url\">$url</a>"
     }
 
-    ds_comment "$cost_id :: $paid_amount"
     # Translate the categories
     set cost_type [im_category_from_id $cost_type_id]
     set cost_status [im_category_from_id $cost_status_id]

@@ -1122,6 +1122,42 @@ where
     return $invoice_id
 }
 
+ad_proc -public im_invoice_item_rate {
+    {-internal_company_id "[im_company_internal]"}
+    {-company_id ""}
+    {-uom_id ""}
+    {-material_id ""}
+    {-task_type_id ""}
+} {
+    Calculate the invoice item rate
+} {
+    # try getting the default rate from the material
+    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id" -default 0]
+    }
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and task_type_id = :type_id" -default 0]
+    }
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id " -default 0]
+    }
+    
+    # It seems we don't have a rate for the specific company, now get the rate from the internal company
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :internal_company_id and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
+    }
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :internal_company_id and uom_id = :uom_id and material_id = :material_id" -default 0]
+    }
+       if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :internal_company_id and uom_id = :uom_id and task_type_id = :type_id" -default 0]
+    }
+    if {$rate eq 0} {
+        set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :internal_company_id and uom_id = :uom_id" -default 0]
+    }
+}
+
 # Note: 
 # output_format = "pdf" used to work with im_html2pdf, an option that probably hadn't been used a lot
 # When we started experimenting using OO headless to create pdfs, parameter pdf_p had been added 
