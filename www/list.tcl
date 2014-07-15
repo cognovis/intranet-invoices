@@ -324,6 +324,7 @@ select
 	to_char(ci.paid_amount,:cur_format) as payment_amount_formatted,
 	ci.paid_currency as payment_currency,
 --	pr.project_nr,
+    im_name_from_id(ci.cost_type_id) as cost_type,
 	to_char(ci.effective_date, 'YYYY-MM') as effective_month,
 	to_char(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100), :cur_format) as invoice_amount_formatted,
     	im_email_from_user_id(i.company_contact_id) as company_contact_email,
