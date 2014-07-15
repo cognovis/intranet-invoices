@@ -159,6 +159,15 @@
 		<% set gen_vars [export_url_vars source_invoice_id target_cost_type_id return_url] %>
 		<A HREF="/intranet-invoices/new-copy?@gen_vars@">@blurb@</A>
 	</li>
+    <if @correction_invoice_exists_p@ eq 0 and @cost_type_id@ eq @invoice_cost_type_id@>
+	<li>
+		<% set blurb [lang::message::lookup $locale intranet-invoices.Correct_Invoice "Correct Invoice"] %>
+		<% set source_invoice_id $invoice_id %>
+		<% set target_cost_type_id [im_cost_type_correction_invoice] %>
+		<% set gen_vars [export_url_vars source_invoice_id target_cost_type_id return_url] %>
+		<A HREF="/intranet-invoices/new-copy?@gen_vars@">@blurb@</A>
+	</li>
+    </if>
 	<if @cost_type_id@ eq @quote_cost_type_id@>
 	<li>
 		<% set blurb [lang::message::lookup $locale intranet-invoices.Generate_Invoice_from_Quote "Generate Invoice from Quote"] %>
@@ -192,14 +201,6 @@
 		<% set target_cost_type_id [im_cost_type_bill] %>
 		<% set gen_vars [export_url_vars source_invoice_id target_cost_type_id return_url] %>
 		<A HREF="/intranet-invoices/new-copy?@gen_vars@">@blurb@</A>
-	</if>
-
-        <if @cost_type_id@ eq @invoice_cost_type_id@>
-        <li>
-           <A HREF="/intranet-invoices/new-copy?target_cost_type_id=3700&source_cost_type_id=3700&source_invoice_id=<%=$invoice_id%>">
-                 <%= [lang::message::lookup "" intranet-invoices.Duplicate_Invoice "Duplicate Invoice"] %>
-           </A>
-        </li>
 	</if>
 </if>
 
@@ -335,7 +336,7 @@
         </tr>
 
 	<tr><td colspan=2 align=right>
-<if @write@>
+<if @write@ and @correction_invoice_exists_p@ eq 0>
 	  <form action=new method=POST>
 	    <%= [export_form_vars return_url invoice_id cost_type_id] %>
 	    <input type=submit name=edit_invoice value='#intranet-invoices.Edit#'>

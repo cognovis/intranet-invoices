@@ -39,26 +39,6 @@ ad_page_contract {
     { expiry_date ""}
 }
 
-# Note: 
-# output_format = "pdf" used to work with im_html2pdf, an option that probably hadn't been used a lot
-# When we started experimenting using OO headless to create pdfs, parameter pdf_p had been added 
-# As of 10/2013 many clients use OO/LibreOffice for PDF creation successfully 
-# It's up to Frank to decide if we keep the im_html2pdf option. 
-# Based on his decision the code should be cleaned up
-
-# ---------------------------------------------------------------
-# Helper Procs
-# ---------------------------------------------------------------
-
-proc encodeXmlValue {value} {
-    regsub -all {&} $value {&amp;} value
-    regsub -all {"} $value {&quot;} value; # "
-    # regsub -all {'} $value {&apos;} value
-    regsub -all {<} $value {&lt;} value
-    regsub -all {>} $value {&gt;} value
-    return $value
-}
-
 # ---------------------------------------------------------------
 # Defaults & Security
 # ---------------------------------------------------------------
@@ -312,6 +292,7 @@ if {1 == [llength $related_projects]} {
 # ---------------------------------------------------------------
 
 set internal_company_id [im_company_internal]
+
 db_1row internal_company_info "
 	select
 		c.company_name as internal_name,
@@ -925,8 +906,10 @@ set colspan [expr 2 + 1*$material_enabled_p + 3*$show_qty_rate_p + 1*$show_compa
 set oo_table_xml ""
 
 set source_invoice_ids [list]
+set line_item_vat_ids [list]
 if { 0 == $item_list_type } {
     db_foreach invoice_items {} {
+        
 	    # $company_project_nr is normally related to each invoice item,
         # because invoice items can be created based on different projects.
         # However, frequently we only have one project per invoice, so that
@@ -994,38 +977,43 @@ if { 0 == $item_list_type } {
         }
 	
         append invoice_item_html "
-	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency</td>
-		</tr>"
-	
-	    # Insert a new XML table row into OpenOffice document
-	    if {"odt" == $template_type} {
-		ns_log NOTICE "intranet-invoices-www-view:: Now escaping vars for rows newly added. Row# $ctr"
-		set lines [split $odt_row_template_xml \n]
-		foreach line $lines {
-		    set var_to_be_escaped ""
-		    regexp -nocase {@(.*?)@} $line var_to_be_escaped
-		    regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
-		    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-		    lappend vars_escaped $var_to_be_escaped
-		    if { "" != $var_to_be_escaped  } {
-			set value [eval "set value \"$$var_to_be_escaped\""]
-			set value [string map {\[ "\\[" \] "\\]"} $value]
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - Value: $value"
-			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
-			ns_log NOTICE "intranet-invoices-www-view:: Escape vars for rows added - cmd: $cmd"
-			eval $cmd
-		    }
-		}
+	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency"
 		
-            set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
-            # Replace placeholders in the OpenOffice template row with values
-            eval [template::adp_compile -string $odt_row_template_xml]
-            set odt_row_xml $__adp_output
+        # If we have a material based taxation, add the VAT now
+        if {$vat_type_id == 42021} {
             
-            # Parse the new row and insert into OOoo document
-            set row_doc [dom parse $odt_row_xml]
-            set new_row [$row_doc documentElement]
-            $odt_template_table_node insertBefore $new_row $odt_template_row_node
+           set vat [db_string vat {
+               select ct.aux_int1 as vat
+               from im_categories cm, im_categories ct, im_invoice_items ii, im_materials im
+               where cm.aux_int2 = ct.category_id
+               and ii.item_material_id = im.material_id
+               and im.material_type_id = cm.category_id
+               and ii.item_id = :item_id
+               } -default ""]
+               
+           if {$vat ne ""} {  
+               append invoice_item_html " (${vat}% VAT)"
+               
+               if {[lsearch $line_item_vat_ids $vat]<0} { 
+                   lappend line_item_vat_ids $vat
+               }
+           }
+        }
+        
+        append invoice_item_html "</td></tr>"
+        
+	
+	# Insert a new XML table row into OpenOffice document
+	if {"odt" == $template_type} {
+	    set item_uom [lang::message::lookup $locale intranet-core.$item_uom $item_uom]
+	    # Replace placeholders in the OpenOffice template row with values
+	    eval [template::adp_compile -string $odt_row_template_xml]
+	    set odt_row_xml [intranet_oo::convert -content $__adp_output]
+	    
+	    # Parse the new row and insert into OOoo document
+	    set row_doc [dom parse $odt_row_xml]
+	    set new_row [$row_doc documentElement]
+	    $odt_template_table_node insertBefore $new_row $odt_template_row_node
 
         }
 	
@@ -1489,6 +1477,10 @@ if {$linked_invoice_ids eq ""} {
     # this might be a parent, try it again for children
     set linked_invoice_ids [relation::get_objects -object_id_one $invoice_id -rel_type "im_invoice_invoice_rel"]
 }
+
+# Check if any of the linked invoices is a correction invoice. If this is the case, delete the edit and edit actions for the invoice
+set correction_invoice_exists_p 0
+
 if {$linked_invoice_ids ne ""} {
 
     set linked_list_html "
@@ -1503,7 +1495,8 @@ if {$linked_invoice_ids ne ""} {
 select
 	invoice_id as linked_invoice_id,
         invoice_nr as linked_invoice_nr,
-        effective_date as linked_effective_date
+        effective_date as linked_effective_date,
+        cost_type_id as linked_cost_type_id
 from
 	im_invoices, im_costs
 where
@@ -1513,14 +1506,17 @@ where
 
     set linked_ctr 0
     db_foreach linked_list $linked_list_sql {
-	append linked_list_html "
+        if {$linked_cost_type_id == [im_cost_type_correction_invoice]} {
+            set correction_invoice_exists_p 1
+        }
+        append linked_list_html "
         <tr $bgcolor([expr $linked_ctr % 2])>
           <td>
 	    <A href=/intranet-invoices/view?invoice_id=$linked_invoice_id>
 	      $linked_invoice_nr
  	    </A>
 	  </td></tr>\n"
-	incr linked_ctr
+        incr linked_ctr
     }
 
     if {!$linked_ctr} {
@@ -1581,6 +1577,18 @@ if {"" == $tax} { set tax 0}
 # Calculate grand total based on the same inner SQL
 db_1row calc_grand_total ""
 
+# Overwrite for material based calculation
+if {$vat_type_id == 42021} {
+    set vat_amount [db_string total "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2))
+                                                 from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
+                                                where invoice_id = :invoice_id
+                                                  and ca.category_id = material_type_id
+                                                  and ii.item_material_id = im.material_id
+                                                  and ca.aux_int2 = cb.category_id"
+                    ]
+    set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
+    set total_due [expr $vat_amount + $subtotal]
+}
 set subtotal_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $subtotal+0] $rounding_precision] "" $locale]
 set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
 set tax_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $tax_amount+0] $rounding_precision] "" $locale]
@@ -1608,12 +1616,33 @@ set subtotal_item_html "
 
 
 if {"" != $vat && 0 != $vat} {
-    append subtotal_item_html "
+    if {[llength $line_item_vat_ids]>1} {
+        foreach vat_id $line_item_vat_ids {
+             set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
+                                                         from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
+                                                        where invoice_id = :invoice_id
+                                                          and ca.category_id = material_type_id
+                                                          and ii.item_material_id = im.material_id
+                                                          and ca.aux_int2 = cb.category_id
+                                                          and cb.aux_int1 = :vat_id" -default ""]
+            set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
+            set vat_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_id+0] $rounding_precision] "" $locale]
+            append subtotal_item_html "
+            <tr>
+              <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
+              <td class=roweven align=right>$vat_amount_pretty $currency</td>
+            </tr>
+            "
+        }
+    
+    } else {
+        append subtotal_item_html "
         <tr>
           <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
           <td class=roweven align=right>$vat_amount_pretty $currency</td>
         </tr>
-"
+        "
+    }
 } else {
     append subtotal_item_html "
         <tr>
