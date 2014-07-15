@@ -297,6 +297,22 @@ set extra_where ""
 # Main SQL
 # -----------------------------------------------------------------
 
+set count_sql "select count(*)  
+from
+        im_invoices_active i,
+        im_costs ci,
+        im_companies c,
+        im_companies p
+    $extra_from
+where
+    i.invoice_id = ci.cost_id
+     and i.customer_id=c.company_id
+        and i.provider_id=p.company_id
+    $company_where
+        $where_clause
+    $extra_where
+"
+
 set sql "
 select
         i.*,
@@ -373,10 +389,7 @@ if {[string equal $letter "ALL"]} {
     # We can't get around counting in advance if we want to be able to
     # sort inside the table on the page for only those users in the
     # query results
-    set total_in_limited [db_string total_in_limited "
-        select count(*)
-        from ($sql) s
-    "]
+    set total_in_limited [db_string total_in_limited "$count_sql"]
     set selection [im_select_row_range $sql $start_idx $end_idx]
 }
 
