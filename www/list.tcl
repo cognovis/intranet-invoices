@@ -20,6 +20,7 @@ ad_page_contract {
     { order_by "Effective Date" }
     { cost_status_id:integer "[im_cost_status_created]" } 
     { cost_type_id:integer 0 } 
+    { cost_center_id:integer "" }
     { company_id:integer 0 } 
     { provider_id:integer 0 } 
     { start_date "" }
@@ -155,6 +156,7 @@ if {0 == $view_id} {
 
 set column_sql "
 select	column_name,
+        column_id,
 	column_render_tcl,
 	visible_for,
         extra_select
@@ -167,14 +169,23 @@ order by
 # Get the main view
 set column_headers [list]
 set column_vars [list]
+set column_headers_admin [list]
 set extra_select_sql ""
+
 db_foreach column_list_sql $column_sql {
+    set admin_html ""
+    if {$user_is_admin_p} { 
+	set url [export_vars -base "/intranet/admin/views/new-column" {column_id return_url}]
+	set admin_html "<a href='$url'>[im_gif wrench ""]</a>" 
+    }
+
     if {"" == $visible_for || [eval $visible_for]} {
-	    lappend column_headers "$column_name"
-	    lappend column_vars "$column_render_tcl"
-	    if {"" != $extra_select} {
-	        append extra_select_sql ",$extra_select"
-	    }
+	lappend column_headers "$column_name"
+	lappend column_headers_admin "$admin_html"
+	lappend column_vars "$column_render_tcl"
+	if {"" != $extra_select} {
+	    append extra_select_sql ",$extra_select"
+	}
     }
 }
 
@@ -318,7 +329,7 @@ select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
         to_char(ci.effective_date, 'YYYY-MM-DD') as cost_effective_date,
-	(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100)) as invoice_amount,
+	(ci.amount + coalesce(ci.vat,0) + coalesce(ci.tax_amount,0)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
 	to_char(ci.paid_amount,:cur_format) as payment_amount_formatted,
@@ -326,7 +337,7 @@ select
 --	pr.project_nr,
     im_name_from_id(ci.cost_type_id) as cost_type,
 	to_char(ci.effective_date, 'YYYY-MM') as effective_month,
-	to_char(ci.amount * (1 + coalesce(ci.vat,0)/100 + coalesce(ci.tax,0)/100), :cur_format) as invoice_amount_formatted,
+	to_char(ci.amount + coalesce(ci.vat_amount,0) + coalesce(ci.tax_amount,0), :cur_format) as invoice_amount_formatted,
     	im_email_from_user_id(i.company_contact_id) as company_contact_email,
       	im_name_from_user_id(i.company_contact_id) as company_contact_name,
 	im_cost_center_code_from_id(ci.cost_center_id) as cost_center_code,
@@ -420,10 +431,27 @@ ad_form \
     -form {
 	{cost_status_id:text(im_category_tree),optional {label \#intranet-invoices.Document_Status\#} {value $cost_status_id} {custom {category_type "Intranet Cost Status" translate_p 1 include_empty_p 1} } }
 	{cost_type_id:text(im_category_tree),optional {label \#intranet-invoices.Document_Type\#} {value $cost_type_id} {custom {category_type "Intranet Cost Type" translate_p 1 include_empty_p 1} } }
-	{company_id:text(select),optional {label \#intranet-invoices.Company\#} {options $company_options} {value $company_id}}
-	{start_date:text(text) {label "[_ intranet-timesheet2.Start_Date]"} {value "$start_date"} {html {size 10}} {after_html {<input type="button" style="height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');" onclick ="return showCalendar('start_date', 'y-m-d');" >}}}
-	{end_date:text(text) {label "[_ intranet-timesheet2.End_Date]"} {value "$end_date"} {html {size 10}} {after_html {<input type="button" style="height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');" onclick ="return showCalendar('end_date', 'y-m-d');" >}}}
-	{view_name:text(select) {label \#intranet-core.View_Name\#} {value "$view_name"} {options $view_options}}
+    }
+
+# Deal with the department
+if {[im_permission $user_id "view_hours_all"]} {
+    set cost_center_options [im_cost_center_options -include_empty 1 -include_empty_name [lang::message::lookup "" intranet-core.All "All"] -department_only_p 0]
+} else {
+    # Limit to Cost Centers where he is the manager
+    set cost_center_options [im_cost_center_options -include_empty 1 -department_only_p 1 -manager_id $user_id]
+}
+
+if {"" != $cost_center_options} {
+    ad_form -extend -name $form_id -form {
+        {cost_center_id:text(select),optional {label "User's Department"} {options $cost_center_options} {value $cost_center_id}}
+    }
+}
+
+ad_form -extend -name $form_id -form {
+    {company_id:text(select),optional {label \#intranet-invoices.Company\#} {options $company_options} {value $company_id}}
+    {start_date:text(text) {label "[_ intranet-timesheet2.Start_Date]"} {value "$start_date"} {html {size 10}} {after_html {<input type="button" style="height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');" onclick ="return showCalendar('start_date', 'y-m-d');" >}}}
+    {end_date:text(text) {label "[_ intranet-timesheet2.End_Date]"} {value "$end_date"} {html {size 10}} {after_html {<input type="button" style="height:20px; width:20px; background: url('/resources/acs-templating/calendar.gif');" onclick ="return showCalendar('end_date', 'y-m-d');" >}}}
+    {view_name:text(select) {label \#intranet-core.View_Name\#} {value "$view_name"} {options $view_options}}
 }
 
 # List to store the view_type_options
@@ -458,16 +486,20 @@ if { ![empty_string_p $query_string] } {
 }
 
 append table_header_html "<tr>\n"
+
+set ctr 0
 foreach col $column_headers {
+    set wrench_html [lindex $column_headers_admin $ctr]
     regsub -all " " $col "_" col_key
     regsub -all "#" $col_key "hash_simbol" col_key
     set col_loc [lang::message::lookup ""  intranet-invoices.$col_key $col]
 
     if {[string compare $order_by $col] == 0 || [regexp {input} $col match]} {
-        append table_header_html "  <td class=rowtitle>$col_loc</td>\n"
+        append table_header_html "  <td class=rowtitle>$col_loc$wrench_html</td>\n"
     } else {
-        append table_header_html "  <td class=rowtitle><a href=\"${url}order_by=[ns_urlencode $col]\">$col_loc</a></td>\n"
+        append table_header_html "  <td class=rowtitle><a href=\"${url}order_by=[ns_urlencode $col]\">$col_loc</a>$wrench_html</td>\n"
     }
+    incr ctr
 }
 
 # Add input field 
