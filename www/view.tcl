@@ -1586,8 +1586,10 @@ if {$vat_type_id == 42021} {
                                                   and ii.item_material_id = im.material_id
                                                   and ca.aux_int2 = cb.category_id"
                     ]
-    set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
-    set total_due [expr $vat_amount + $subtotal]
+    if {$vat_amount ne ""} {
+	set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
+	set total_due [expr $vat_amount + $subtotal]
+    }
 }
 set subtotal_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $subtotal+0] $rounding_precision] "" $locale]
 set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
