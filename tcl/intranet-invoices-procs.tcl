@@ -1020,7 +1020,11 @@ set
 	payment_days	= :payment_days,
 	variable_cost_p = 't',
 	amount		= null,
-	currency	= :currency
+	currency	= :currency,
+        vat_amount      = :vat_amount,
+        tax_amount      = :tax_amount,
+        vat_type_id     = :vat_type_id,
+        payment_term_id = :payment_term_id
 where
 	cost_id = :invoice_id
 "
