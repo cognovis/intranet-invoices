@@ -1559,6 +1559,10 @@ set payment_terms_note $__adp_output
 # Deal with payment method and variables in them
 # -------------------------
 
+if {$payment_method_id eq ""} {
+    set payment_method_id $default_payment_method_id
+    db_dml update_payment_method "update im_invoices set payment_method_id = :payment_method_id"
+}
 set payment_method [im_category_from_id -locale $locale $payment_method_id]
 set payment_method_note [im_category_string1 -category_id $payment_method_id -locale $locale]
 eval [template::adp_compile -string $payment_method_note]
