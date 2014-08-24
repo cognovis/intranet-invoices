@@ -19,6 +19,8 @@ ad_page_contract {
     {customer_id:integer ""}
     {provider_id:integer ""}
     {project_id:integer ""}
+    {target_invoice_date ""}
+    {target_invoice_nr ""}
     { blurb "Copy Financial Document" }
     { return_url "/intranet-invoice/"}
 }
@@ -100,7 +102,7 @@ select
 	ci.*,
 	i.invoice_nr as org_invoice_nr,
 	ci.note as cost_note,
-	to_char(ci.effective_date,:date_format) as effective_date,
+	to_char(ci.effective_date,:date_format) as source_effective_date,
 	trim(to_char(ci.vat, :vat_format)) as vat,
 	trim(to_char(ci.tax, :tax_format)) as tax,
 	im_name_from_user_id(i.company_contact_id) as company_contact_name,
@@ -133,9 +135,15 @@ set target_cost_type [im_category_from_id $target_cost_type_id]
 
 # Use today's date as effective date, because the
 # quote was old...
-set effective_date $todays_date
-set delivery_date $effective_date
+if {"" == $target_invoice_date} {
+    set effective_date $todays_date
+} else {
+    set effective_date $target_invoice_date
+}
 
+if {"" == $delivery_date} {
+    set delivery_date $effective_date
+}
 # ---------------------------------------------------------------
 
 set customer_select [im_company_select customer_id $customer_id "" "CustOrIntl"]
@@ -238,7 +246,11 @@ set tax_enabled_p [ad_parameter -package_id [im_package_invoices_id] "EnabledInv
 
 # New One: Just create a new invoice nr
 # for the target FinDoc type.
-set invoice_nr [im_next_invoice_nr -cost_type_id $target_cost_type_id]
+
+set invoice_nr $target_invoice_nr
+if {"" == $invoice_nr} {
+    set invoice_nr [im_next_invoice_nr -cost_type_id $target_cost_type_id]
+}
 
 set new_invoice_id [im_new_object_id]
 
