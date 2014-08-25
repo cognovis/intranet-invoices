@@ -329,9 +329,8 @@ set currencies [db_list distinct_currencies "
 "]
 
 if {1 != [llength $currencies]} {
-    ad_return_complaint 1 "<b>[_ intranet-invoices.Error_multiple_currencies]:</b><br>
+    util_user_message -html -message "<b>[_ intranet-invoices.Error_multiple_currencies]:</b><br>
     [_ intranet-invoices.Blurb_multiple_currencies] <pre>$currencies</pre>"
-    return
 }
 
 set discount_perc 0.0

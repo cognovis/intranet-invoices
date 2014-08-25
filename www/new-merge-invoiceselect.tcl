@@ -462,7 +462,7 @@ db_foreach company_dynfield_attribs "
             aa.object_type = 'im_company' and
             (a.also_hard_coded_p is NULL or a.also_hard_coded_p = 'f') and
             l.attribute_id = a.attribute_id and
-            l.page_url = '/intranet-invoices/new-copy-invoiceselect'
+            l.page_url = '/intranet-invoices/new-merge-invoiceselect'
     order by
             coalesce(l.pos_y,0), coalesce(l.pos_x,0)
 " {
