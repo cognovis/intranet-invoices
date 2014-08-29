@@ -397,7 +397,7 @@ if { 0 != [file size $tmp_filename] } {
     }
     
 
-    set base_path [im_filestorage_base_path "cost" $invoice_id]
+    set base_path [im_filestorage_cost_path $invoice_id]
     if {"" == $base_path} {
         ad_return_complaint 1 "<LI>Unknown folder type \"$folder_type\"."
         return
