@@ -366,10 +366,11 @@ foreach nr $item_list {
     if { ""==$project_id_item } { set project_id_item $project_id }
 
     set rate $item_rate($nr)
+    if {$rate eq ""} {set rate 0}
     set sort_order $item_sort_order($nr)
     set task_id $item_task_id($nr)
     
-    ns_log NOTICE "Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id"
+    ns_log NOTICE "Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id $rate"
 
     # Enter the rate from the material if the rate is zero but the material is set
     if {$rate eq 0} {

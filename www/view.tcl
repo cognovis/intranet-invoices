@@ -1615,11 +1615,10 @@ set subtotal_item_html "
         </tr>
 "
 
-
-
 if {"" != $vat && 0 != $vat} {
     set vat_amount_total 0
-    if {[llength $line_item_vat_ids]>1} {
+    if {[llength $line_item_vat_ids]>0} {
+
         foreach vat_id $line_item_vat_ids {
              set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
                                                          from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
@@ -1631,16 +1630,25 @@ if {"" != $vat && 0 != $vat} {
             set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
             set vat_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_id+0] $rounding_precision] "" $locale]
 	    set vat_amount_total [expr $vat_amount_total + $vat_amount]
-            append subtotal_item_html "
+	    if {[llength $line_item_vat_ids]>1} {
+		append subtotal_item_html "
             <tr>
               <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
               <td class=roweven align=right>$vat_amount_pretty $currency</td>
             </tr>
             "
-        }
+	    } else {
+		append subtotal_item_html "
+        <tr>
+          <td class=roweven colspan=$colspan_sub align=right>[lang::message::lookup $locale intranet-invoices.VAT]: $vat_perc_pretty %&nbsp;</td>
+          <td class=roweven align=right>$vat_amount_pretty $currency</td>
+        </tr>
+        "
+	    }
 	
-	# Store the total vat amount with the cost
-	db_dml update_cost "update im_costs set vat_amount = :vat_amount_total where cost_id = :invoice_id"
+	    # Store the total vat amount with the cost
+	    db_dml update_cost "update im_costs set vat_amount = :vat_amount_total where cost_id = :invoice_id"
+	}
     } else {
         append subtotal_item_html "
         <tr>
