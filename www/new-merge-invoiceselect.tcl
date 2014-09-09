@@ -10,13 +10,14 @@
 # ---------------------------------------------------------------
 
 ad_page_contract { 
-    Copy existing financial document to a new one.
+    Merge existing financial documents to a new one.
+    @author malte.sussdorff@cognovis.de
     @author frank.bergmann@project-open.com
+
 } {
     source_cost_type_id:integer
     target_cost_type_id:integer
-    {blurb "" }
-    return_url
+    {return_url ""}
     { company_id:integer "" }
     { customer_id:integer "" }
     { provider_id:integer "" }
@@ -24,8 +25,8 @@ ad_page_contract {
     { start_idx:integer 0 }
     { how_many "" }
     { view_name "invoice_select" }
+    { cost_status_id:integer ""}
 }
-
 
 # ---------------------------------------------------------------
 # Security
@@ -180,8 +181,12 @@ set order_by_clause "order by invoice_id DESC"
 
 set sql "
 select
-        i.*,
-	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
+    i.invoice_id,
+    ci.cost_id,
+    i.invoice_nr,
+    i.payment_method_id,
+    ci.currency,
+    	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
 	o.object_type,
 	ci.amount as invoice_amount,
 	ci.currency as invoice_currency,
@@ -430,9 +435,18 @@ where
         and c.main_office_id = o.office_id
 "
 
+if {"" == $invoice_currency} {
+    set invoice_currency [ad_parameter -package_id [im_package_cost_id] "DefaultCurrency" "" "EUR"]
+}
+
+set payment_term_select [im_category_select_plain "Intranet Payment Term" payment_term_id $payment_term_id]
+set payment_method_select [im_invoice_payment_method_select payment_method_id $payment_method_id]
+set invoice_currency_select [im_currency_select invoice_currency $currency]
+
 unset bgcolor
 set dynfield_attributes_html ""
 set ctr 0
+
 db_foreach company_dynfield_attribs "
     select
     aa.pretty_name,
@@ -448,7 +462,7 @@ db_foreach company_dynfield_attribs "
             aa.object_type = 'im_company' and
             (a.also_hard_coded_p is NULL or a.also_hard_coded_p = 'f') and
             l.attribute_id = a.attribute_id and
-            l.page_url = '/intranet-invoices/new-copy-invoiceselect'
+            l.page_url = '/intranet-invoices/new-merge-invoiceselect'
     order by
             coalesce(l.pos_y,0), coalesce(l.pos_x,0)
 " {
