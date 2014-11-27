@@ -535,8 +535,8 @@ if {[catch {
     set locale $user_locale
 }
 
-ns_log Notice "view.tcl: locale=$locale"
-ns_log Notice "view.tcl: template_type=$template_type"
+ns_log Debug "view.tcl: locale=$locale"
+ns_log Debug "view.tcl: template_type=$template_type"
 
 
 # ----------------------------------------------------------------------------------------
@@ -578,7 +578,7 @@ if {"odt" == $template_type} {
     # ------------------------------------------------
     # Create a temporary directory for our contents
     set odt_tmp_path [ns_tmpnam]
-    ns_log Notice "view.tcl: odt_tmp_path=$odt_tmp_path"
+    ns_log Debug "view.tcl: odt_tmp_path=$odt_tmp_path"
     ns_mkdir $odt_tmp_path
     
     # The document 
@@ -591,7 +591,7 @@ if {"odt" == $template_type} {
     
     # Determine the location of the template
     set invoice_template_path "$invoice_template_base_path/$template"
-    ns_log Notice "view.tcl: invoice_template_path='$invoice_template_path'"
+    ns_log Debug "view.tcl: invoice_template_path='$invoice_template_path'"
 
     # Create a copy of the template into the temporary dir
     ns_cp $invoice_template_path $odt_zip
@@ -1774,7 +1774,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	if {"" != $send_to_user_as} {
 	    # Redirect to mail sending page:
 	    # Add the rendered invoice to the form variables
-	    ns_log Notice "view.tcl: html sending email"
+	    ns_log Debug "view.tcl: html sending email"
 	    rp_form_put invoice_html $invoices_as_html
 	    rp_internal_redirect notify
 	    ad_script_abort
@@ -1782,7 +1782,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	} else {
 	    
 	    # Show invoice using template
-	    ns_log Notice "view.tcl: html showing template"
+	    ns_log Debug "view.tcl: html showing template"
 	    db_release_unused_handles
 	    ns_return 200 text/html $invoices_as_html
 	    ad_script_abort
@@ -1794,7 +1794,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
     # PDF output
     if {$output_format == "pdf" && $pdf_enabled_p} {
 	
-	ns_log Notice "view.tcl: pdf output format"
+	ns_log Debug "view.tcl: pdf output format"
 	set result [im_html2pdf $invoices_as_html]
 	set tmp_pdf_file [lindex $result 0]
 	set errlist [lindex $result 1]
@@ -1812,7 +1812,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	if {"" != $send_to_user_as} {
 	    # Redirect to mail sending page:
 	    # Add the rendered invoice to the form variables
-	    ns_log Notice "view.tcl: pdf send out"
+	    ns_log Debug "view.tcl: pdf send out"
 	    rp_form_put invoice_pdf $binary_content
 	    rp_internal_redirect notify
 	    ad_script_abort
@@ -1820,7 +1820,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	} else {
 	    
 	    # PDF Preview
-	    ns_log Notice "view.tcl: pdf preview"
+	    ns_log Debug "view.tcl: pdf preview"
 	    db_release_unused_handles
 	    ns_returnfile 200 application/pdf $tmp_pdf_file
 	    catch { file delete $tmp_pdf_file } err
@@ -1831,7 +1831,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
     # OpenOffice Output
     if {$output_format == "odt"} {
        
-	ns_log Notice "view.tcl: odf formatting"
+	ns_log Debug "view.tcl: odf formatting"
 	# ------------------------------------------------
         # setup and constants
 	
@@ -1922,7 +1922,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 
 	# The zip -j command replaces the specified file in the zipfile 
 	# which happens to be the OpenOffice File. 
-	ns_log Notice "view.tcl: before zipping"
+	ns_log Debug "view.tcl: before zipping"
 	exec zip -j $odt_zip $odt_content
 	exec zip -j $odt_zip $odt_styles
 
@@ -1940,7 +1940,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	    ns_set cput $outputheaders "Content-Disposition" "attachment; filename=${invoice_nr}.pdf"
 	    ns_returnfile 200 application/pdf $pdf_filename
 	} else {
-	    ns_log Notice "view.tcl: before returning file"
+	    ns_log Debug "view.tcl: before returning file"
 	    set outputheaders [ns_conn outputheaders]
 	    ns_set cput $outputheaders "Content-Disposition" "attachment; filename=${invoice_nr}.odt"
 	    ns_returnfile 200 application/odt $odt_zip
