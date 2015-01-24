@@ -621,13 +621,13 @@ if {"odt" == $template_type} {
     set odt_template_table_node ""
     foreach table_node $odt_table_nodes {
         set table_as_list [$table_node asList]
-	    if {[regexp {item_units_pretty} $table_as_list match]} { set odt_template_table_node $table_node }
+	    if {[regexp {item_name} $table_as_list match]} { set odt_template_table_node $table_node }
     }
 
     # Deal with the the situation that we didn't find the line
     if {"" == $odt_template_table_node} {
         ad_return_complaint 1 "
-		<b>Didn't find table including '@item_units_pretty'</b>:<br>
+		<b>Didn't find table including '@item_name'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a table with the value
 		above.
@@ -641,13 +641,13 @@ if {"odt" == $template_type} {
     set odt_template_row_count 0
     foreach row_node $odt_table_rows_nodes {
         set row_as_list [$row_node asList]
-        if {[regexp {item_units_pretty} $row_as_list match]} { set odt_template_row_node $row_node }
+        if {[regexp {item_name} $row_as_list match]} { set odt_template_row_node $row_node }
         incr odt_template_row_count
     }
 
     if {"" == $odt_template_row_node} {
 	    ad_return_complaint 1 "
-		<b>Didn't find row including '@item_units_pretty'</b>:<br>
+		<b>Didn't find row including '@item_name'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a row with the value
 		above.
@@ -980,9 +980,10 @@ if { 0 == $item_list_type } {
 	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency"
 		
         # If we have a material based taxation, add the VAT now
+	set item_vat $vat
         if {$vat_type_id == 42021} {
             
-           set vat [db_string vat {
+           set item_vat [db_string vat {
                select ct.aux_int1 as vat
                from im_categories cm, im_categories ct, im_invoice_items ii, im_materials im
                where cm.aux_int2 = ct.category_id
@@ -991,15 +992,16 @@ if { 0 == $item_list_type } {
                and ii.item_id = :item_id
                } -default ""]
                
-           if {$vat ne ""} {  
-               append invoice_item_html " (${vat}% VAT)"
-               
-               if {[lsearch $line_item_vat_ids $vat]<0} { 
-                   lappend line_item_vat_ids $vat
+           if {$item_vat ne ""} {  
+               append invoice_item_html " (${item_vat}% VAT)"
+               set item_vat_pretty "${item_vat}%"
+               if {[lsearch $line_item_vat_ids $item_vat]<0} { 
+                   lappend line_item_vat_ids $item_vat
                }
            }
         }
-        
+	
+	set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
         append invoice_item_html "</td></tr>"
         
 	
@@ -1622,6 +1624,11 @@ set subtotal_item_html "
 if {"" != $vat && 0 != $vat} {
     set vat_amount_total 0
     if {[llength $line_item_vat_ids]>0} {
+	
+	# Initialize the various vat_amounts
+	foreach vat_id [db_list vat_ids "select distinct aux_int1 from im_categories where category_type = 'Intranet VAT Type'"] {
+	    set vat_amount_${vat_id} ""
+	}
 
         foreach vat_id $line_item_vat_ids {
              set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
@@ -1649,7 +1656,8 @@ if {"" != $vat && 0 != $vat} {
         </tr>
         "
 	    }
-	
+
+	    set vat_amount_${vat_id} "$vat_amount_pretty"
 	    # Store the total vat amount with the cost
 	    db_dml update_cost "update im_costs set vat_amount = :vat_amount_total where cost_id = :invoice_id"
 	}
