@@ -1534,6 +1534,45 @@ where
     set linked_effective_date_pretty [lc_time_fmt $linked_effective_date "%x" $locale]
 }
 
+# ---------------------------------------------------------------
+# PDF Invoice Revision list
+# ---------------------------------------------------------------
+
+set revision_list_html ""
+set invoice_item_id [content::item::get_id_by_name -name "${invoice_nr}.pdf" -parent_id $invoice_id]
+
+if {"" != $invoice_item_id} {
+    
+    if {[content::item::get_revision_count -item_id $invoice_item_id]>1} {
+	# we have multiple revisions, show them
+	
+	set revision_list_html "
+         <table border=0 cellPadding=1 cellspacing=1>
+         <tr>
+          <td align=middle class=rowtitle colspan=3>
+            [lang::message::lookup $locale intranet-invoices.Invoice_Revisions]
+          </td>
+         </tr>"
+
+	set linked_ctr 0
+	db_foreach revisions "select revision_id as invoice_revision_id,publish_date from cr_revisions where item_id = :invoice_item_id order by revision_id desc" {
+	    set publish_date_pretty [lc_time_fmt $publish_date "%x %X" $user_locale]
+	    set revision_url [export_vars -base "/intranet-invoices/pdf" -url {invoice_id invoice_revision_id}]
+	    append revision_list_html "
+        <tr $bgcolor([expr $linked_ctr % 2])>
+          <td>
+	    <A href=$revision_url>
+	      $publish_date_pretty
+ 	    </A>
+	  </td></tr>\n"
+	    incr linked_ctr
+	}
+	
+	append revision_list_html "
+        </table>"
+
+    }
+}
 
 # ---------------------------------------------------------------
 # Add subtotal + VAT + TAX = Grand Total

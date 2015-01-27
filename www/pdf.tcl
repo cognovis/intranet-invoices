@@ -24,19 +24,27 @@ ad_page_contract {
     @cvs-id $Id$
 } {
     invoice_id:notnull
-    {new_revision_p "0"}
+    {invoice_revision_id ""}
     {return_url ""}
 } 
 
 set page_title "[_ intranet-invoices.Invoice_Mail]"
+db_1row invoice_info "select invoice_nr,last_modified from im_invoices,acs_objects where invoice_id = :invoice_id and invoice_id = object_id"
 
-set invoice_nr [db_string name "select invoice_nr from im_invoices where invoice_id = :invoice_id"]
+if {"" == $invoice_revision_id} {
 
-set invoice_item_id [content::item::get_id_by_name -name "${invoice_nr}.pdf" -parent_id $invoice_id]
-if {"" == $invoice_item_id || $new_revision_p} {
-    set invoice_revision_id [intranet_openoffice::invoice_pdf -invoice_id $invoice_id]
-} else {
-    set invoice_revision_id [content::item::get_best_revision -item_id $invoice_item_id]
+    set invoice_item_id [content::item::get_id_by_name -name "${invoice_nr}.pdf" -parent_id $invoice_id]
+
+    if {"" == $invoice_item_id} {
+	set invoice_revision_id [intranet_openoffice::invoice_pdf -invoice_id $invoice_id]
+    } else {
+	set invoice_revision_id [content::item::get_best_revision -item_id $invoice_item_id]
+	
+	# Check if we need to create a new revision
+	if {[db_string date_check "select 1 from acs_objects where object_id = :invoice_revision_id and last_modified < :last_modified" -default 0]} {
+	    set invoice_revision_id [intranet_openoffice::invoice_pdf -invoice_id $invoice_id]
+	}
+    }
 }
 
 

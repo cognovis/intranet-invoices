@@ -43,6 +43,9 @@
   <td>
     @linked_list_html;noquote@
   </td>
+  <td>
+    @revision_list_html;noquote@
+  </td>
 
 <if @surcharge_enabled_p@>
 <td>
