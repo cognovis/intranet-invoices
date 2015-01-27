@@ -987,7 +987,7 @@ if { 0 == $item_list_type } {
         if {$vat_type_id == 42021} {
             
            set item_vat [db_string vat {
-               select ct.aux_int1 as vat
+               select coalesce(ct.aux_int1,0) as vat
                from im_categories cm, im_categories ct, im_invoice_items ii, im_materials im
                where cm.aux_int2 = ct.category_id
                and ii.item_material_id = im.material_id
@@ -1003,7 +1003,8 @@ if { 0 == $item_list_type } {
                }
            }
         }
-	
+
+	ds_comment "$amount :: $item_vat"
 	set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
         append invoice_item_html "</td></tr>"
         
@@ -1627,14 +1628,15 @@ db_1row calc_grand_total ""
 
 # Overwrite for material based calculation
 if {$vat_type_id == 42021} {
-    set vat_amount [db_string total "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2))
+    set vat_amount [db_string total "select coalesce(sum(round(item_units*price_per_unit*cb.aux_int1/100,2)),0)
                                                  from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
                                                 where invoice_id = :invoice_id
                                                   and ca.category_id = material_type_id
                                                   and ii.item_material_id = im.material_id
                                                   and ca.aux_int2 = cb.category_id"
                     ]
-    if {$vat_amount ne ""} {
+    if {$vat_amount ne "0.00" && $subtotal ne "0"} {
+	ds_comment "$vat_amount --- $subtotal --"
 	set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
 	set total_due [expr $vat_amount + $subtotal]
     }
@@ -1663,17 +1665,18 @@ set subtotal_item_html "
         </tr>
 "
 
+# Initialize the various vat_amounts
+foreach vat_id [db_list vat_ids "select distinct aux_int1 from im_categories where category_type = 'Intranet VAT Type'"] {
+    set vat_amount_${vat_id} ""
+}
+
 if {"" != $vat && 0 != $vat} {
     set vat_amount_total 0
     if {[llength $line_item_vat_ids]>0} {
 	
-	# Initialize the various vat_amounts
-	foreach vat_id [db_list vat_ids "select distinct aux_int1 from im_categories where category_type = 'Intranet VAT Type'"] {
-	    set vat_amount_${vat_id} ""
-	}
 
         foreach vat_id $line_item_vat_ids {
-             set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
+             set vat_amount [db_string vat_amount "select coalesce(sum(round(item_units*price_per_unit*cb.aux_int1/100,2)),0) as vat_amount
                                                          from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
                                                         where invoice_id = :invoice_id
                                                           and ca.category_id = material_type_id
@@ -1909,26 +1912,26 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	set odt_template_content [$root asXML -indent 1]
 
 	# Escaping other vars used, skip vars already escaped for multiple lines  
-	ns_log NOTICE "intranet-invoices-www-view:: Now escaping all other vars used in template"
+	ns_log debug "intranet-invoices-www-view:: Now escaping all other vars used in template"
 	set lines [split $odt_template_content \n]
 	foreach line $lines {
-            ns_log NOTICE "intranet-invoices-www-view:: Line: $line"
+            ns_log debug "intranet-invoices-www-view:: Line: $line"
             set var_to_be_escaped ""
 	    regexp -nocase {@(.*?)@} $line var_to_be_escaped    
             regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
 	    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-            ns_log NOTICE "intranet-invoices-www-view:: var_to_be_escaped: $var_to_be_escaped"
+            ns_log debug "intranet-invoices-www-view:: var_to_be_escaped: $var_to_be_escaped"
 	    if { -1 == [lsearch $vars_escaped $var_to_be_escaped] } {
 		if { "" != $var_to_be_escaped  } {
 		    if { [info exists $var_to_be_escaped] } {
 			set value [eval "set value \"$$var_to_be_escaped\""]
-			ns_log NOTICE "intranet-invoices-www-view:: Other vars - Value: $value"
+			ns_log debug "intranet-invoices-www-view:: Other vars - Value: $value"
 			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
 			eval $cmd
 		    }
 		}
 	    } else {
-		ns_log NOTICE "intranet-invoices-www-view:: Other vars: Skipping $var_to_be_escaped "
+		ns_log debug "intranet-invoices-www-view:: Other vars: Skipping $var_to_be_escaped "
 	    }
 	}
 
