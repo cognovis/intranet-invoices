@@ -519,21 +519,24 @@ db_1row accounting_contact_info "
 # ---------------------------------------------------------------
 
 set template_type ""
+set recipient_locale ""
 if {0 != $render_template_id} {
 
     # New convention, "invoice.en_US.adp"
     if {[regexp {(.*)\.([_a-zA-Z]*)\.([a-zA-Z][a-zA-Z][a-zA-Z])} $template match body loc template_type]} {
-	    set locale $loc
+	    set recipient_locale $loc
     }
 }
 
 # Check if the given locale throws an error
 # Reset the locale to the default locale then
 if {[catch {
-    lang::message::lookup $locale "intranet-core.Reporting"
+    lang::message::lookup $recipient_locale "intranet-core.Reporting"
 } errmsg]} {
-    set locale $user_locale
+    set recipient_locale [lang::user::local -user_id $company_contact_id] 
 }
+
+if {"" != $recipient_locale} {set locale $recipient_locale}
 
 ns_log Debug "view.tcl: locale=$locale"
 ns_log Debug "view.tcl: template_type=$template_type"
@@ -666,8 +669,8 @@ if {"odt" == $template_type} {
 # ---------------------------------------------------------------
 
 set invoice_date_pretty [lc_time_fmt $invoice_date "%x" $locale]
-#set delivery_date_pretty2 [lc_time_fmt $delivery_date "%x" $locale]
-set delivery_date_pretty2 $delivery_date
+set delivery_date_pretty2 [lc_time_fmt $delivery_date "%x" $locale]
+#set delivery_date_pretty2 $delivery_date
 
 set calculated_due_date_pretty [lc_time_fmt $calculated_due_date "%x" $locale]
 
