@@ -43,6 +43,9 @@
   <td>
     @linked_list_html;noquote@
   </td>
+  <td>
+    @revision_list_html;noquote@
+  </td>
 
 <if @surcharge_enabled_p@>
 <td>
@@ -101,7 +104,7 @@
 	  <A HREF="/intranet-invoices/view?@preview_vars@">
 		<%= [lang::message::lookup "" intranet-invoices.Preview_using_template "Preview using template"] %>
 	  </A>&nbsp;
-          (<A HREF="/intranet-invoices/view?@preview_vars@&pdf_p=1">PDF</A> - <a href="/intranet-invoices/mail?@preview_vars@">MAIL</a>)
+          (<A HREF="/intranet-invoices/pdf?@preview_vars@">PDF</A> - <a href="/intranet-invoices/mail?@preview_vars@">MAIL</a>)
         <li>
           <% set render_template_id $template_id %>
           <% set preview_vars [export_url_vars invoice_id render_template_id return_url] %>

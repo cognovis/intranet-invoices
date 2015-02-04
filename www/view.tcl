@@ -519,21 +519,24 @@ db_1row accounting_contact_info "
 # ---------------------------------------------------------------
 
 set template_type ""
+set recipient_locale ""
 if {0 != $render_template_id} {
 
     # New convention, "invoice.en_US.adp"
     if {[regexp {(.*)\.([_a-zA-Z]*)\.([a-zA-Z][a-zA-Z][a-zA-Z])} $template match body loc template_type]} {
-	    set locale $loc
+	    set recipient_locale $loc
     }
 }
 
 # Check if the given locale throws an error
 # Reset the locale to the default locale then
 if {[catch {
-    lang::message::lookup $locale "intranet-core.Reporting"
+    lang::message::lookup $recipient_locale "intranet-core.Reporting"
 } errmsg]} {
-    set locale $user_locale
+    set recipient_locale [lang::user::local -user_id $company_contact_id] 
 }
+
+if {"" != $recipient_locale} {set locale $recipient_locale}
 
 ns_log Debug "view.tcl: locale=$locale"
 ns_log Debug "view.tcl: template_type=$template_type"
@@ -621,13 +624,13 @@ if {"odt" == $template_type} {
     set odt_template_table_node ""
     foreach table_node $odt_table_nodes {
         set table_as_list [$table_node asList]
-	    if {[regexp {item_units_pretty} $table_as_list match]} { set odt_template_table_node $table_node }
+	    if {[regexp {item_name} $table_as_list match]} { set odt_template_table_node $table_node }
     }
 
     # Deal with the the situation that we didn't find the line
     if {"" == $odt_template_table_node} {
         ad_return_complaint 1 "
-		<b>Didn't find table including '@item_units_pretty'</b>:<br>
+		<b>Didn't find table including '@item_name'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a table with the value
 		above.
@@ -641,13 +644,13 @@ if {"odt" == $template_type} {
     set odt_template_row_count 0
     foreach row_node $odt_table_rows_nodes {
         set row_as_list [$row_node asList]
-        if {[regexp {item_units_pretty} $row_as_list match]} { set odt_template_row_node $row_node }
+        if {[regexp {item_name} $row_as_list match]} { set odt_template_row_node $row_node }
         incr odt_template_row_count
     }
 
     if {"" == $odt_template_row_node} {
 	    ad_return_complaint 1 "
-		<b>Didn't find row including '@item_units_pretty'</b>:<br>
+		<b>Didn't find row including '@item_name'</b>:<br>
 		We have found a valid OOoo template at '$invoice_template_path'.
 		However, this template does not include a row with the value
 		above.
@@ -666,8 +669,8 @@ if {"odt" == $template_type} {
 # ---------------------------------------------------------------
 
 set invoice_date_pretty [lc_time_fmt $invoice_date "%x" $locale]
-#set delivery_date_pretty2 [lc_time_fmt $delivery_date "%x" $locale]
-set delivery_date_pretty2 $delivery_date
+set delivery_date_pretty2 [lc_time_fmt $delivery_date "%x" $locale]
+#set delivery_date_pretty2 $delivery_date
 
 set calculated_due_date_pretty [lc_time_fmt $calculated_due_date "%x" $locale]
 
@@ -980,10 +983,11 @@ if { 0 == $item_list_type } {
 	          <td $bgcolor([expr $ctr % 2]) align=right>$amount_pretty&nbsp;$currency"
 		
         # If we have a material based taxation, add the VAT now
+	set item_vat $vat
         if {$vat_type_id == 42021} {
             
-           set vat [db_string vat {
-               select ct.aux_int1 as vat
+           set item_vat [db_string vat {
+               select coalesce(ct.aux_int1,0) as vat
                from im_categories cm, im_categories ct, im_invoice_items ii, im_materials im
                where cm.aux_int2 = ct.category_id
                and ii.item_material_id = im.material_id
@@ -991,15 +995,17 @@ if { 0 == $item_list_type } {
                and ii.item_id = :item_id
                } -default ""]
                
-           if {$vat ne ""} {  
-               append invoice_item_html " (${vat}% VAT)"
-               
-               if {[lsearch $line_item_vat_ids $vat]<0} { 
-                   lappend line_item_vat_ids $vat
+           if {$item_vat ne ""} {  
+               append invoice_item_html " (${item_vat}% VAT)"
+               set item_vat_pretty "${item_vat}%"
+               if {[lsearch $line_item_vat_ids $item_vat]<0} { 
+                   lappend line_item_vat_ids $item_vat
                }
            }
         }
-        
+
+	ds_comment "$amount :: $item_vat"
+	set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
         append invoice_item_html "</td></tr>"
         
 	
@@ -1529,6 +1535,45 @@ where
     set linked_effective_date_pretty [lc_time_fmt $linked_effective_date "%x" $locale]
 }
 
+# ---------------------------------------------------------------
+# PDF Invoice Revision list
+# ---------------------------------------------------------------
+
+set revision_list_html ""
+set invoice_item_id [content::item::get_id_by_name -name "${invoice_nr}.pdf" -parent_id $invoice_id]
+
+if {"" != $invoice_item_id} {
+    
+    if {[content::item::get_revision_count -item_id $invoice_item_id]>1} {
+	# we have multiple revisions, show them
+	
+	set revision_list_html "
+         <table border=0 cellPadding=1 cellspacing=1>
+         <tr>
+          <td align=middle class=rowtitle colspan=3>
+            [lang::message::lookup $locale intranet-invoices.Invoice_Revisions]
+          </td>
+         </tr>"
+
+	set linked_ctr 0
+	db_foreach revisions "select revision_id as invoice_revision_id,publish_date from cr_revisions where item_id = :invoice_item_id order by revision_id desc" {
+	    set publish_date_pretty [lc_time_fmt $publish_date "%x %X" $user_locale]
+	    set revision_url [export_vars -base "/intranet-invoices/pdf" -url {invoice_id invoice_revision_id}]
+	    append revision_list_html "
+        <tr $bgcolor([expr $linked_ctr % 2])>
+          <td>
+	    <A href=$revision_url>
+	      $publish_date_pretty
+ 	    </A>
+	  </td></tr>\n"
+	    incr linked_ctr
+	}
+	
+	append revision_list_html "
+        </table>"
+
+    }
+}
 
 # ---------------------------------------------------------------
 # Add subtotal + VAT + TAX = Grand Total
@@ -1583,14 +1628,15 @@ db_1row calc_grand_total ""
 
 # Overwrite for material based calculation
 if {$vat_type_id == 42021} {
-    set vat_amount [db_string total "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2))
+    set vat_amount [db_string total "select coalesce(sum(round(item_units*price_per_unit*cb.aux_int1/100,2)),0)
                                                  from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
                                                 where invoice_id = :invoice_id
                                                   and ca.category_id = material_type_id
                                                   and ii.item_material_id = im.material_id
                                                   and ca.aux_int2 = cb.category_id"
                     ]
-    if {$vat_amount ne ""} {
+    if {$vat_amount ne "0.00" && $subtotal ne "0"} {
+	ds_comment "$vat_amount --- $subtotal --"
 	set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
 	set total_due [expr $vat_amount + $subtotal]
     }
@@ -1619,12 +1665,18 @@ set subtotal_item_html "
         </tr>
 "
 
+# Initialize the various vat_amounts
+foreach vat_id [db_list vat_ids "select distinct aux_int1 from im_categories where category_type = 'Intranet VAT Type'"] {
+    set vat_amount_${vat_id} ""
+}
+
 if {"" != $vat && 0 != $vat} {
     set vat_amount_total 0
     if {[llength $line_item_vat_ids]>0} {
+	
 
         foreach vat_id $line_item_vat_ids {
-             set vat_amount [db_string vat_amount "select sum(round(item_units*price_per_unit*cb.aux_int1/100,2)) as vat_amount
+             set vat_amount [db_string vat_amount "select coalesce(sum(round(item_units*price_per_unit*cb.aux_int1/100,2)),0) as vat_amount
                                                          from im_invoice_items ii, im_categories ca, im_categories cb, im_materials im 
                                                         where invoice_id = :invoice_id
                                                           and ca.category_id = material_type_id
@@ -1650,6 +1702,7 @@ if {"" != $vat && 0 != $vat} {
         "
 	    }
 
+	    set vat_amount_${vat_id} "$vat_amount_pretty"
 	    # Store the total vat amount with the cost
 	    db_dml update_cost "update im_costs set vat_amount = :vat_amount_total where cost_id = :invoice_id"
 	}
@@ -1861,26 +1914,26 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 	set odt_template_content [$root asXML -indent 1]
 
 	# Escaping other vars used, skip vars already escaped for multiple lines  
-	ns_log NOTICE "intranet-invoices-www-view:: Now escaping all other vars used in template"
+	ns_log debug "intranet-invoices-www-view:: Now escaping all other vars used in template"
 	set lines [split $odt_template_content \n]
 	foreach line $lines {
-            ns_log NOTICE "intranet-invoices-www-view:: Line: $line"
+            ns_log debug "intranet-invoices-www-view:: Line: $line"
             set var_to_be_escaped ""
 	    regexp -nocase {@(.*?)@} $line var_to_be_escaped    
             regsub -all "@" $var_to_be_escaped "" var_to_be_escaped
 	    regsub -all ";noquote" $var_to_be_escaped "" var_to_be_escaped
-            ns_log NOTICE "intranet-invoices-www-view:: var_to_be_escaped: $var_to_be_escaped"
+            ns_log debug "intranet-invoices-www-view:: var_to_be_escaped: $var_to_be_escaped"
 	    if { -1 == [lsearch $vars_escaped $var_to_be_escaped] } {
 		if { "" != $var_to_be_escaped  } {
 		    if { [info exists $var_to_be_escaped] } {
 			set value [eval "set value \"$$var_to_be_escaped\""]
-			ns_log NOTICE "intranet-invoices-www-view:: Other vars - Value: $value"
+			ns_log debug "intranet-invoices-www-view:: Other vars - Value: $value"
 			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
 			eval $cmd
 		    }
 		}
 	    } else {
-		ns_log NOTICE "intranet-invoices-www-view:: Other vars: Skipping $var_to_be_escaped "
+		ns_log debug "intranet-invoices-www-view:: Other vars: Skipping $var_to_be_escaped "
 	    }
 	}
 
