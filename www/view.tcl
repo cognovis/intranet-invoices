@@ -1004,8 +1004,9 @@ if { 0 == $item_list_type } {
            }
         }
 
-	ds_comment "$amount :: $item_vat"
-	set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
+	if {$amount >0 && $item_vat >0} {
+	    set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
+	}
         append invoice_item_html "</td></tr>"
         
 	
