@@ -1649,7 +1649,7 @@ if {"" != $vat && 0 != $vat} {
         </tr>
         "
 	    }
-	
+
 	    # Store the total vat amount with the cost
 	    db_dml update_cost "update im_costs set vat_amount = :vat_amount_total where cost_id = :invoice_id"
 	}
@@ -1660,6 +1660,8 @@ if {"" != $vat && 0 != $vat} {
           <td class=roweven align=right>$vat_amount_pretty $currency</td>
         </tr>
         "
+	# Store the total vat amount with the cost
+	db_dml update_cost "update im_costs set vat_amount = :vat_amount where cost_id = :invoice_id"
     }
 } else {
     append subtotal_item_html "

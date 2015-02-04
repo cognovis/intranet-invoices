@@ -332,7 +332,7 @@ select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
         to_char(ci.effective_date, 'YYYY-MM-DD') as cost_effective_date,
-	(ci.amount + coalesce(ci.vat,0) + coalesce(ci.tax_amount,0)) as invoice_amount,
+	(ci.amount + coalesce(ci.vat_amount,0) + coalesce(ci.tax_amount,0)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
 	to_char(ci.paid_amount,:cur_format) as payment_amount_formatted,
