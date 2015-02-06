@@ -205,6 +205,9 @@ if { ![empty_string_p $cost_type_id] && $cost_type_id != 0 } {
 if { ![empty_string_p $company_id] && $company_id != 0 } {
     lappend criteria "(i.customer_id = :company_id OR i.provider_id = :company_id)"
 }
+if { ![empty_string_p $cost_center_id] && $cost_center_id != 0 } {
+    lappend criteria "i.cost_center_id = :cost_center_id"
+}
 if { ![empty_string_p $provider_id] && $provider_id != 0 } {
     lappend criteria "i.provider_id=:provider_id"
 }
@@ -329,7 +332,7 @@ select
         i.*,
 	(to_date(to_char(i.invoice_date,:date_format),:date_format) + i.payment_days) as due_date_calculated,
         to_char(ci.effective_date, 'YYYY-MM-DD') as cost_effective_date,
-	(ci.amount + coalesce(ci.vat,0) + coalesce(ci.tax_amount,0)) as invoice_amount,
+	(ci.amount + coalesce(ci.vat_amount,0) + coalesce(ci.tax_amount,0)) as invoice_amount,
 	ci.currency as invoice_currency,
 	ci.paid_amount as payment_amount,
 	to_char(ci.paid_amount,:cur_format) as payment_amount_formatted,

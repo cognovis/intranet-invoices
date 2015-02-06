@@ -366,10 +366,11 @@ foreach nr $item_list {
     if { ""==$project_id_item } { set project_id_item $project_id }
 
     set rate $item_rate($nr)
+    if {$rate eq ""} {set rate 0}
     set sort_order $item_sort_order($nr)
     set task_id $item_task_id($nr)
     
-    ns_log NOTICE "Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id"
+    ns_log NOTICE "Now creating invoice item: item_name: $name, invoice_id: $invoice_id, project_id: $project_id, sort_order: $sort_order, item_uom_id: $uom_id $rate"
 
     # Enter the rate from the material if the rate is zero but the material is set
     if {$rate eq 0} {
@@ -519,7 +520,8 @@ if {!$invoice_exists_p} {
     im_audit -object_type "im_invoice" -object_id $invoice_id -action after_update -status_id $cost_status_id -type_id $cost_type_id
 }
 
-
+# Update the acs_object
+db_dml acs_object_update "update acs_objects set last_modified = now() where object_id = $invoice_id"
 
 db_release_unused_handles
 ad_returnredirect "/intranet-invoices/view?invoice_id=$invoice_id"
