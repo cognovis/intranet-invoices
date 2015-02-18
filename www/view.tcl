@@ -1004,6 +1004,7 @@ if { 0 == $item_list_type } {
            }
         }
 
+	set amount_vat_pretty ""
 	if {$amount >0 && $item_vat >0} {
 	    set amount_vat_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr {double(round($amount+$amount*$item_vat/100))}] $rounding_precision] "" $locale]
 	}
