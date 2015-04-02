@@ -841,9 +841,26 @@ where
           </td>
         </tr>\n"
     }
+
     append payment_list_html "
-	</table>
         </form>\n"
+    
+    if {[apm_package_installed_p "intranet-collmex"]} {
+	# Add a link to download all payments for this invoice
+	incr payment_ctr
+	append payment_list_html "
+	<form action=/intranet-collmex/load-payments method=post>
+	[export_form_vars invoice_id return_url]
+        <tr $bgcolor([expr $payment_ctr % 2])>
+          <td align=right colspan=3>
+	    <input type=submit name=collmex value=\"[lang::message::lookup $locale intranet-collmex.Load_payments]\">
+          </td>
+        </tr></form>\n"
+    }
+
+    append payment_list_html "
+	</table>\n"
+
 }
 
 # ---------------------------------------------------------------
