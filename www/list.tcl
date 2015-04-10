@@ -441,12 +441,12 @@ if {[im_permission $user_id "view_hours_all"]} {
     set cost_center_options [im_cost_center_options -include_empty 1 -include_empty_name [lang::message::lookup "" intranet-core.All "All"] -department_only_p 0]
 } else {
     # Limit to Cost Centers where he is the manager
-    set cost_center_options [im_cost_center_options -include_empty 1 -department_only_p 1 -manager_id $user_id]
+    set cost_center_options [im_cost_center_options -include_empty 1  -include_empty_name [lang::message::lookup "" intranet-core.All "All"] -department_only_p 1 -manager_id $user_id]
 }
 
 if {"" != $cost_center_options} {
     ad_form -extend -name $form_id -form {
-        {cost_center_id:text(select),optional {label "User's Department"} {options $cost_center_options} {value $cost_center_id}}
+        {cost_center_id:text(select),optional {label "Cost Center"} {options $cost_center_options} {value $cost_center_id}}
     }
 }
 
