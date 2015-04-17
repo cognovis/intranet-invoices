@@ -37,6 +37,7 @@
   <msg key="Date">Datum</msg>
   <msg key="days">Tage</msg>
   <msg key="Del">Löschen</msg>
+  <msg key="delivery_date">Lieferdatum</msg>
   <msg key="Description">Beschreibung</msg>
   <msg key="Document_">Dokument Nr.</msg>
   <msg key="Document_hash_simbol">Dokument Nr.</msg>
@@ -72,7 +73,36 @@
   <msg key="InterCo_Quote_New">Neues InterCo Angebot</msg>
   <msg key="intranet-invoices.Error_multiple_currencies">mehrere Währungsfehler</msg>
   <msg key="Invoice_Address">Rechnungsadresse</msg>
+  <msg key="invoice_email_body_3700">Hallo %first_names% 
+ 
+anbei finden Sie Ihre Rechnung. Bitte überprüfen Sie ob alles richtig ist und lassen Sie uns wissen, wenn Änderungen notwendig sind.
+
+Vielen Dank für Ihren Auftrag!</msg>
+  <msg key="invoice_email_body_3702">Hallo %first_names% 
+ 
+anbei finden Sie unser Angebot. 
+
+Vielen Dank für Ihre Anfrage. Wir freuen uns auf Ihre Rückmeldung.
+
+Beste Grüße</msg>
+  <msg key="invoice_email_body_3704">Hallo %first_names% 
+ 
+anbei findest du unsere Gutschriften für Projekte aus dem letzten Monat. Wenn die Projekte nicht abgeschlossen sind, folgen die dazugehörigen Gutschriften im nächsten Monat. Bitte überprüfe, ob alles richtig ist und lass uns wissen, wenn Änderungen notwendig sind.
+
+Bei Fragen sind wir jederzeit gerne für dich da. Bitte an Tine unter ts@kolibri-kommunikation schreiben.
+
+Danke für die tolle Zusammenarbeit!</msg>
+  <msg key="invoice_email_body_3706">Hallo %first_names% 
+ 
+anbei findest du unseren Auftrag. Bitte überprüfe, ob alles richtig ist und lasse uns wissen, wenn Änderungen notwendig sind.
+
+Wir freuen uns auf deine Arbeit!</msg>
+  <msg key="invoice_email_subject_3700">Rechnung</msg>
+  <msg key="invoice_email_subject_3702">Angebot</msg>
+  <msg key="invoice_email_subject_3704">Gutschrift</msg>
+  <msg key="invoice_email_subject_3706">Auftrag/PO</msg>
   <msg key="Line">Zeile</msg>
+  <msg key="Linked_Invoices">Verknüpfte&lt;br /&gt;Rechnungen</msg>
   <msg key="lt_Cant_find_the_documen">Dokument Nr. %invoice_id% nicht gefunden</msg>
   <msg key="lt_Dear_accounting_conta">Sehr geehrte( r) Frau/Herr %accounting_contact_name%,
 Eine neue %cost_type% wurde für sie erstellt auf
@@ -154,6 +184,7 @@ Mit freundlichen Grüßen
   <msg key="Payment_Method_1">Zahlungsmethode</msg>
   <msg key="Payment_Terms">Zahlungsbedingungen</msg>
   <msg key="Payment_terms">Zahlungsbedingungen</msg>
+  <msg key="Paypal_Payments">Überweisungsliste Paypal</msg>
   <msg key="Phone">Telefon</msg>
   <msg key="Preview">Vorschau</msg>
   <msg key="Preview_as_HTML">Vorschau als HTML</msg>
@@ -186,6 +217,7 @@ Mit freundlichen Grüßen
   <msg key="Send_invoice_as_HTML_link">Sende Rechnung als HTML Link</msg>
   <msg key="Send_invoice_as_link">Sende Rechnung als Link</msg>
   <msg key="Show_Included_Timesheet_Hours">Enthaltene Stunden aus der Zeiterfassung anzeigen</msg>
+  <msg key="Skrill_Payments">Überweisungsliste Skrill</msg>
   <msg key="Start_Confirmation_Workflow">Bestätigungsworkflow starten</msg>
   <msg key="Status">Status</msg>
   <msg key="Submit">Ausführen</msg>
