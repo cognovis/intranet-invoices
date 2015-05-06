@@ -89,7 +89,7 @@ set required_field "<font color=red size=+1><B>*</B></font>"
 # ---------------------------------------------------------------
 
 # Type of the financial document
-set cost_type_id [db_string cost_type_id "select cost_type_id from im_costs where cost_id = :invoice_id" -default 0]
+db_1row cost_infor "select coalesce(cost_type_id,0) as cost_type_id, coalesce(cost_status_id,0) as cost_status_id from im_costs where cost_id = :invoice_id"
 set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowCostCenterP" "" 0]
 
 # Number formats
@@ -164,8 +164,10 @@ set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowC
 # Check if the invoices was changed outside of ]po[...
 # Normally, the current values of the invoice should match
 # exactly the last registered audit version...
+
+im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update -type_id $cost_type_id -status_id $cost_status_id -debug_p 1
 if {[catch {
-    im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update
+    im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update -type_id $cost_type_id
 } err_msg]} {
     ns_log Error "im_audit: Error action: 'before update' for object_id: $object_id"     
 }
@@ -2209,5 +2211,4 @@ db_foreach column_list_sql $column_sql {
 
 
 append project_base_data_html "</table>"
-
 #set admin_p 1
