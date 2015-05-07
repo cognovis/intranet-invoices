@@ -973,21 +973,21 @@ if { 0 == $item_list_type } {
         if {$material_enabled_p} {
 	        if {"" != $item_material_id && 12812 != $item_material_id} {
 #                set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
-		    db_1row material_info "select * from im_materials where material_id = :item_material_id"
-		    if {[lsearch [im_sub_categories 9014] $material_type_id]>=0} {
-			# We need to get the category_id in order to get the translation...
-			set material_list [split $material_name ","]
-			set source_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 1]]]]
-			set target_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 2]]]]
-
-			set trans_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 0]]]]
-			set project_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 3]]]]
-			set item_material "$trans_type $project_type: $source_language => $target_language"
-		    } else {
-			set item_material $material_name
-		    }
+        		    db_1row material_info "select * from im_materials where material_id = :item_material_id"
+            		    if {[lsearch [im_sub_categories 9014] $material_type_id]>=0} {
+                			# We need to get the category_id in order to get the translation...
+                			set material_list [split $material_name ","]
+                			set source_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 1]]]]
+                			set target_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 2]]]]
+                
+                			set trans_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 0]]]]
+                			set project_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 3]]]]
+                			set item_material "$trans_type $project_type: $source_language => $target_language"
+            		    } else {
+                			set item_material $material_name
+            		    }
             } else {
-                set item_material ""
+                item_material ""
             }
             append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2])>$item_material</td>
