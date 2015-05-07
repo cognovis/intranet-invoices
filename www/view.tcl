@@ -1654,7 +1654,7 @@ if {$vat_type_id == 42021} {
                                                   and ii.item_material_id = im.material_id
                                                   and ca.aux_int2 = cb.category_id"
                     ]
-    if {$vat_amount ne "0.00" && $subtotal ne "0"} {
+    if {$vat_amount ne "0.00" && $subtotal ne "0" && $subtotal ne "" } {
 	ds_comment "$vat_amount --- $subtotal --"
 	set vat [format "%.2f" [expr $vat_amount / $subtotal *100]]
 	set total_due [expr $vat_amount + $subtotal]
