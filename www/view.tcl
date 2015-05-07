@@ -89,7 +89,7 @@ set required_field "<font color=red size=+1><B>*</B></font>"
 # ---------------------------------------------------------------
 
 # Type of the financial document
-set cost_type_id [db_string cost_type_id "select cost_type_id from im_costs where cost_id = :invoice_id" -default 0]
+db_1row cost_infor "select coalesce(cost_type_id,0) as cost_type_id, coalesce(cost_status_id,0) as cost_status_id from im_costs where cost_id = :invoice_id"
 set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowCostCenterP" "" 0]
 
 # Number formats
@@ -164,8 +164,10 @@ set show_cost_center_p [ad_parameter -package_id [im_package_invoices_id] "ShowC
 # Check if the invoices was changed outside of ]po[...
 # Normally, the current values of the invoice should match
 # exactly the last registered audit version...
+
+im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update -type_id $cost_type_id -status_id $cost_status_id -debug_p 1
 if {[catch {
-    im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update
+    im_audit -object_type "im_invoice" -object_id $invoice_id -action before_update -type_id $cost_type_id
 } err_msg]} {
     ns_log Error "im_audit: Error action: 'before update' for object_id: $object_id"     
 }
@@ -929,8 +931,7 @@ set source_invoice_ids [list]
 set line_item_vat_ids [list]
 if { 0 == $item_list_type } {
     db_foreach invoice_items {} {
-        
-	    # $company_project_nr is normally related to each invoice item,
+        # $company_project_nr is normally related to each invoice item,
         # because invoice items can be created based on different projects.
         # However, frequently we only have one project per invoice, so that
         # we can use this project's company_project_nr as a default
@@ -940,9 +941,12 @@ if { 0 == $item_list_type } {
         if {"" == $project_short_name} { 
 	        set project_short_name $project_short_name_default
         }
-	
+
         set amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $amount+0] $rounding_precision] "" $locale]
-        set item_units_pretty [lc_numeric [expr $item_units+0] "" $locale]
+	if {[expr $item_units - int($item_units)]==0} {
+	    set item_units [expr int($item_units)]
+	}
+        set item_units_pretty [lc_numeric [expr int($item_units)+0] "" $locale]
         set price_per_unit_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $price_per_unit+0] $rounding_precision] "" $locale]
 	
         append invoice_item_html "
@@ -968,7 +972,20 @@ if { 0 == $item_list_type } {
 	    # Display the material if we have materials enabled for invoice line items
         if {$material_enabled_p} {
 	        if {"" != $item_material_id && 12812 != $item_material_id} {
-                set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
+#                set item_material [db_string material_name "select material_name from im_materials where material_id = :item_material_id" -default ""]
+		    db_1row material_info "select * from im_materials where material_id = :item_material_id"
+		    if {[lsearch [im_sub_categories 9014] $material_type_id]>=0} {
+			# We need to get the category_id in order to get the translation...
+			set material_list [split $material_name ","]
+			set source_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 1]]]]
+			set target_language [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 2]]]]
+
+			set trans_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 0]]]]
+			set project_type [im_category_from_id [im_category_from_category -category [string trim [lindex $material_list 3]]]]
+			set item_material "$trans_type $project_type: $source_language => $target_language"
+		    } else {
+			set item_material $material_name
+		    }
             } else {
                 set item_material ""
             }
@@ -1660,11 +1677,23 @@ if {$vat_type_id == 42021} {
 	set total_due [expr $vat_amount + $subtotal]
     }
 }
+
+# Support the setting of formats
+set number_format_string "%.0f"
+if {[info exists number_format_string]} {
+    set vat [format "$number_format_string" $vat]
+}
+    
 set subtotal_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $subtotal+0] $rounding_precision] "" $locale]
 set vat_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat_amount+0] $rounding_precision] "" $locale]
 set tax_amount_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $tax_amount+0] $rounding_precision] "" $locale]
 
-set vat_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat+0] $rounding_precision] "" $locale]
+if {[expr $vat - int($vat)]==0} {
+    set vat [expr int($vat)]
+}
+
+set vat_perc_pretty [lc_numeric [expr int($vat)+0] "" $locale]
+#set vat_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $vat+0] $rounding_precision] "" $locale]
 set tax_perc_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $tax+0] $rounding_precision] "" $locale]
 set grand_total_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $grand_total+0] $rounding_precision] "" $locale]
 set total_due_pretty [lc_numeric [im_numeric_add_trailing_zeros [expr $total_due+0] $rounding_precision] "" $locale]
@@ -2209,5 +2238,4 @@ db_foreach column_list_sql $column_sql {
 
 
 append project_base_data_html "</table>"
-
 #set admin_p 1

@@ -868,6 +868,34 @@ ad_proc -public im_invoice_send_invoice_mail {
 
     db_1row get_recipient_info "select first_names, last_name, email as to_addr from cc_users where user_id = :recipient_id"
 
+    db_1row invoice_info "select invoice_nr,last_modified from im_invoices,acs_objects where invoice_id = :invoice_id and invoice_id = object_id"
+
+if {![db_0or1row related_projects_sql "
+        select distinct
+        r.object_id_one as project_id,
+        p.project_name,
+        project_lead_id,
+        im_name_from_id(project_lead_id) as project_manager,
+        p.project_nr,
+        p.parent_id,
+        p.description,
+        trim(both p.company_project_nr) as customer_project_nr
+    from
+            acs_rels r,
+        im_projects p
+    where
+        r.object_id_one = p.project_id
+        and r.object_id_two = :invoice_id
+        order by project_id desc
+        limit 1
+"]} {
+    set project_name ""
+    set project_manager [im_name_from_user_id $user_id]
+    set project_lead_id $user_id
+    set customer_project_nr ""
+    set project_nr ""
+}
+
     if {"" == $from_addr} {
 	set from_addr [party::email -party_id $user_id]
     }
