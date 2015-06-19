@@ -92,6 +92,9 @@ if {$invoice_or_quote_p} {
 set rounding_precision 2
 set rf [expr exp(log(10) * $rounding_precision)]
 
+if {"" == $payment_term_id} {
+    set payment_term_id [db_string term_id "select min(category_id) from im_categories where category_type = 'Intranet Payment Term'" -default ""]
+}
 
 set payment_days [db_string payment_days "select aux_int1 from im_categories where category_id = :payment_term_id" -default ""]
 if {"" == $payment_days} {
