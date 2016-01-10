@@ -472,7 +472,7 @@ foreach source_id $source_invoice_ids {
                         and object_id_two = :invoice_id
     "
 	if {0 ==  $v_rel_exists} {
-	    set rel_id [db_exec_plsql create_invoice_rel ""]
+#	    set rel_id [db_exec_plsql create_invoice_rel ""]
 	}
     }
 }
