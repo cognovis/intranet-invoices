@@ -140,8 +140,8 @@ ad_proc -public im_next_invoice_nr {
 } {
 
     if { ![info exists par_im_next_invoice_nr] } { 
-	ad_return_complaint 1 "ee"
-	set par_im_next_invoice_nr null 
+		ad_return_complaint 1 "ee"
+		set par_im_next_invoice_nr null 
     }
 
     # ----------------------------------------------------
@@ -161,29 +161,29 @@ ad_proc -public im_next_invoice_nr {
     ns_log NOTICE "intranet-invoices-procs::im_next_invoice_nr: call invoice_nr_generator: cost_type_id $cost_type_id cost_center_id $cost_center_id date_format $date_format par_im_next_invoice_nr $par_im_next_invoice_nr"
 
     if {"" != $invoice_nr_generator} {
-	if { "" == $par_im_next_invoice_nr } {
-	    return [eval $invoice_nr_generator -cost_type_id $cost_type_id -cost_center_id $cost_center_id -date_format $date_format]
-	} else {
-	    return [eval $invoice_nr_generator -cost_type_id $cost_type_id -cost_center_id $cost_center_id -date_format $date_format -par_im_next_invoice_nr $par_im_next_invoice_nr]
-	}
-
+		if { "" == $par_im_next_invoice_nr } {
+		    return [eval $invoice_nr_generator -cost_type_id $cost_type_id -cost_center_id $cost_center_id -date_format $date_format]
+		} else {
+		    return [eval $invoice_nr_generator -cost_type_id $cost_type_id -cost_center_id $cost_center_id -date_format $date_format -par_im_next_invoice_nr $par_im_next_invoice_nr]
+		}
     }
     
     # ----------------------------------------------------
     # Set the prefix for financial document type
     set prefix ""
     if {$use_invoice_prefix_p} {
-	switch $cost_type_id {
-	    3700 { set prefix "I" }
-	    3702 { set prefix "Q" }
-	    3704 { set prefix "B" }
-	    3706 { set prefix "P" }
-	    3718 { set prefix "T" }
-	    3720 { set prefix "E" }
-	    3720 { set prefix "R" }
-	    3724 { set prefix "D" }
-	    default { set prefix "" }
-	}
+		switch $cost_type_id {
+		    3700 { set prefix "I" }
+		    3702 { set prefix "Q" }
+		    3704 { set prefix "B" }
+		    3706 { set prefix "P" }
+		    3718 { set prefix "T" }
+		    3720 { set prefix "E" }
+		    3720 { set prefix "R" }
+		    3724 { set prefix "D" }
+			3725 { set prefix "C" }
+		    default { set prefix "" }
+		}
     }
 
     # ----------------------------------------------------
@@ -198,7 +198,7 @@ ad_proc -public im_next_invoice_nr {
 
     set prefix_where ""
     if {$prefix_len} {
-	set prefix_where "and substr(invoice_nr, 1, 1) = :prefix"
+		set prefix_where "and substr(invoice_nr, 1, 1) = :prefix"
     }
 
     set sql "
@@ -223,7 +223,7 @@ where
     set last_invoice_nr [db_string max_invoice_nr $sql -default ""]
     set last_invoice_nr [string trimleft $last_invoice_nr "0"] 
     if {[empty_string_p $last_invoice_nr]} {
-	set last_invoice_nr 0
+		set last_invoice_nr 0
     }
     set next_number [expr $last_invoice_nr + 1]
 
@@ -915,6 +915,8 @@ if {![db_0or1row related_projects_sql "
 ad_proc -public im_invoice_copy_new {
     -source_invoice_ids
     -target_cost_type_id
+    -no_callback:boolean
+    -cancellation:boolean
 } {
     Generate a new invoice of the target_cost_type_id with the data from the original quotes or purchase orders.
 
@@ -1001,6 +1003,18 @@ LIMIT 1
     }
     
     # ---------------------------------------------------------------
+    # Cancellation: Turn the amounts around
+    # ---------------------------------------------------------------
+	if {$cancellation_p} {
+		if {$vat_amount ne ""} {
+			set vat_amount [expr {$vat_amount * -1}]
+		}
+		if {$tax_amount ne ""} {
+			set tax_amount [expr {$tax_amount * -1}]			
+		}
+	}
+
+    # ---------------------------------------------------------------
     # Update invoice base data
     # ---------------------------------------------------------------
     
@@ -1075,15 +1089,15 @@ where
     set select_project [im_invoices_unify_select_projects $related_project_ids]
     
     foreach project_id $select_project {
-	db_1row "get relations" "
-		select	count(*) as v_rel_exists
-                from    acs_rels
-                where   object_id_one = :project_id
-                        and object_id_two = :invoice_id
-    "
-	if {0 ==  $v_rel_exists} {
-	    set rel_id [db_exec_plsql create_rel ""]
-	}
+		db_1row "get relations" "
+			select	count(*) as v_rel_exists
+	                from    acs_rels
+	                where   object_id_one = :project_id
+	                        and object_id_two = :invoice_id
+	    "
+		if {0 ==  $v_rel_exists} {
+		    set rel_id [db_exec_plsql create_rel ""]
+		}
     }
 
     # ---------------------------------------------------------------
@@ -1091,17 +1105,17 @@ where
     # ---------------------------------------------------------------
     
     foreach source_id $source_invoice_ids {
-	if {$source_id ne ""} {
-	    db_1row "get relations" "
-		select	count(*) as v_rel_exists
-                from    acs_rels
-                where   object_id_one = :source_id
-                        and object_id_two = :invoice_id
-    "
-	    if {0 ==  $v_rel_exists} {
-		set rel_id [db_exec_plsql create_invoice_rel ""]
-	    }
-	}
+		if {$source_id ne ""} {
+		    db_1row "get relations" "
+			select	count(*) as v_rel_exists
+	                from    acs_rels
+	                where   object_id_one = :source_id
+	                        and object_id_two = :invoice_id
+	    "
+		    if {0 ==  $v_rel_exists} {
+			set rel_id [db_exec_plsql create_invoice_rel ""]
+		    }
+		}
     }
 
     # ---------------------------------------------------------------
@@ -1110,28 +1124,55 @@ where
 
     set invoice_item_ids [db_list item_ids "select item_id from im_invoice_items where invoice_id in ([template::util::tcl_to_sql_list $source_invoice_ids])"]
     foreach old_item_id $invoice_item_ids {
-	set item_id [db_nextval "im_invoice_items_seq"]
-	set insert_invoice_items_sql "
-        INSERT INTO im_invoice_items (
-                item_id, item_name,
-                project_id, invoice_id,
-                item_units, item_uom_id,
-                price_per_unit, currency,
-                sort_order, item_type_id,
-                item_material_id,
-                item_status_id, description, task_id,
-		item_source_invoice_id
-        ) select :item_id, item_name,
-                project_id, :invoice_id,
-                item_units, item_uom_id,
-                price_per_unit, currency,
-                sort_order, item_type_id,
-                item_material_id,
-                item_status_id,description, task_id,
-		invoice_id from im_invoice_items where item_id = :old_item_id
-	" 
-        db_dml insert_invoice_items $insert_invoice_items_sql
-    }
+		set item_id [db_nextval "im_invoice_items_seq"]
+		
+		set insert_invoice_items_sql "
+	        INSERT INTO im_invoice_items (
+	                item_id, item_name,
+	                project_id, invoice_id,
+	                item_units, item_uom_id,
+	                price_per_unit, currency,
+	                sort_order, item_type_id,
+	                item_material_id,
+	                item_status_id, description, task_id,
+			item_source_invoice_id
+	        ) select :item_id, item_name,
+	                project_id, :invoice_id,
+	                item_units, item_uom_id,
+	                price_per_unit, currency,
+	                sort_order, item_type_id,
+	                item_material_id,
+	                item_status_id,description, task_id,
+			invoice_id from im_invoice_items where item_id = :old_item_id
+		" 
+		
+		# ---------------------------------------------------------------
+		# Cancellation: Turn the amounts around
+		# ---------------------------------------------------------------
+		
+		if {$cancellation_p} {
+			set insert_invoice_items_sql "
+				INSERT INTO im_invoice_items (
+						item_id, item_name,
+						project_id, invoice_id,
+						item_units, item_uom_id,
+						price_per_unit, currency,
+						sort_order, item_type_id,
+						item_material_id,
+						item_status_id, description, task_id,
+				item_source_invoice_id
+				) select :item_id, item_name,
+						project_id, :invoice_id,
+						item_units * -1, item_uom_id,
+						price_per_unit, currency,
+						sort_order, item_type_id,
+						item_material_id,
+						item_status_id,description, task_id,
+				invoice_id from im_invoice_items where item_id = :old_item_id
+			" 
+		}
+	    db_dml insert_invoice_items $insert_invoice_items_sql
+	}
 
     # ---------------------------------------------------------------
     # Update the invoice value
@@ -1140,17 +1181,27 @@ where
     if {"" == $surcharge_perc} { set surcharge_perc 0.0 }
     
     im_invoice_update_rounded_amount \
-	-invoice_id $invoice_id \
-	-discount_perc $discount_perc \
-	-surcharge_perc $surcharge_perc
+		-invoice_id $invoice_id \
+		-discount_perc $discount_perc \
+		-surcharge_perc $surcharge_perc
     
     # ---------------------------------------------------------------
-    # 
+    # Cancellation: Set the invoice to paid status
+    # This will happen anyway if you have a correctly working
+    # accounting software setup
     # ---------------------------------------------------------------
-    
+	if {$cancellation_p} {
+		db_dml update_costs "
+			update im_costs
+			set cost_status_id = [im_cost_status_paid]
+			where cost_id = $invoice_id"
+		set cost_status_id [im_cost_status_paid]
+	}
+	
     # Audit the creation of the invoice
-    im_audit -object_type "im_invoice" -object_id $invoice_id -action after_create -status_id $cost_status_id -type_id $new_cost_type_id
-
+    if {!$no_callback_p} {
+	    im_audit -object_type "im_invoice" -object_id $invoice_id -action after_create -status_id $cost_status_id -type_id $new_cost_type_id
+	}
     return $invoice_id
 }
 

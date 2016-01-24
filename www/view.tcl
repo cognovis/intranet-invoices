@@ -987,7 +987,7 @@ if { 0 == $item_list_type } {
                 			set item_material $material_name
             		    }
             } else {
-                item_material ""
+                set item_material ""
             }
             append invoice_item_html "
 	          <td $bgcolor([expr $ctr % 2])>$item_material</td>
