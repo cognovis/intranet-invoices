@@ -1976,6 +1976,7 @@ if {0 != $render_template_id || "" != $send_to_user_as} {
 		    if { [info exists $var_to_be_escaped] } {
 			set value [eval "set value \"$$var_to_be_escaped\""]
 			ns_log debug "intranet-invoices-www-view:: Other vars - Value: $value"
+			regsub -all {\"} $value {'} value
 			set cmd "set $var_to_be_escaped \"[encodeXmlValue $value]\""
 			eval $cmd
 		    }
