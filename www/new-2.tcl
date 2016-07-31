@@ -386,7 +386,7 @@ foreach nr $item_list {
 	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and task_type_id = :type_id" -default 0]
 	}
 	if {$rate eq 0} {
-	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id " -default 0]
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id limit 1" -default 0]
 	}
 	if {$rate eq 0} {
 	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = [im_company_internal] and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
@@ -472,7 +472,7 @@ foreach source_id $source_invoice_ids {
                         and object_id_two = :invoice_id
     "
 	if {0 ==  $v_rel_exists} {
-#	    set rel_id [db_exec_plsql create_invoice_rel ""]
+	    set rel_id [db_exec_plsql create_invoice_rel ""]
 	}
     }
 }
