@@ -47,7 +47,6 @@ if {"" == $invoice_revision_id} {
     }
 }
 
-
 set outputheaders [ns_conn outputheaders]
 ns_set cput $outputheaders "Content-Disposition" "attachment; filename=${invoice_nr}.pdf"
 ns_returnfile 200 application/pdf [content::revision::get_cr_file_path -revision_id $invoice_revision_id]
