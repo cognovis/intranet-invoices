@@ -29,16 +29,49 @@ ad_page_contract {
 
 set page_title "[_ intranet-invoices.Invoice_Mail]"
 
-set invoice_nr [db_string name "select invoice_nr from im_invoices where invoice_id = :invoice_id"]
+db_1row invoice_info "select invoice_nr,last_modified from im_invoices,acs_objects where invoice_id = :invoice_id and invoice_id = object_id"
 
 set invoice_item_id [content::item::get_id_by_name -name "${invoice_nr}.pdf" -parent_id $invoice_id]
+
 if {"" == $invoice_item_id} {
     set invoice_revision_id [intranet_openoffice::invoice_pdf -invoice_id $invoice_id]
 } else {
     set invoice_revision_id [content::item::get_best_revision -item_id $invoice_item_id]
+
+    # Check if we need to create a new revision
+    if {[db_string date_check "select 1 from acs_objects where object_id = :invoice_revision_id and last_modified < :last_modified" -default 0]} {
+        set invoice_revision_id [intranet_openoffice::invoice_pdf -invoice_id $invoice_id]
+    }
 }
 
 set user_id [ad_conn user_id]
+
+if {![db_0or1row related_projects_sql "
+        select distinct
+        r.object_id_one as project_id,
+        p.project_name,
+        project_lead_id,
+        im_name_from_id(project_lead_id) as project_manager,
+        p.project_nr,
+        p.parent_id,
+        p.description,
+        trim(both p.company_project_nr) as customer_project_nr
+    from
+            acs_rels r,
+        im_projects p
+    where
+        r.object_id_one = p.project_id
+        and r.object_id_two = :invoice_id
+        order by project_id desc
+        limit 1
+"]} {
+    set project_name ""
+    set project_manager [im_name_from_user_id $user_id]
+    set project_lead_id $user_id
+    set customer_project_nr ""
+    set project_nr ""
+}
+
 set recipient_id [db_string company_contact_id "select company_contact_id from im_invoices where invoice_id = :invoice_id" -default $user_id]
 
 db_1row user_info "select first_names, last_name from persons where person_id = :recipient_id"
