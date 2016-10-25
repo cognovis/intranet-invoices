@@ -378,12 +378,12 @@ foreach nr $item_list {
     # Enter the rate from the material if the rate is zero but the material is set
     if {$rate eq 0} {
 	# try getting the default rate from the material
-	set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id" -default 0]
+	set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id and task_type_id = :type_id limit 1" -default 0]
 	if {$rate eq 0} {
-	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id" -default 0]
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and material_id = :material_id limit 1" -default 0]
 	}
 	if {$rate eq 0} {
-	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and task_type_id = :type_id" -default 0]
+	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id and task_type_id = :type_id limit 1" -default 0]
 	}
 	if {$rate eq 0} {
 	    set rate [db_string company_type_rate "select price from im_timesheet_prices where company_id = :company_id and uom_id = :uom_id limit 1" -default 0]
